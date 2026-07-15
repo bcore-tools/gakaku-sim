@@ -27,9 +27,8 @@
   button{font-family:inherit;font-size:inherit;color:inherit;background:none;border:none;cursor:pointer}
   button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
-  /* ---------- 開始画面 ---------- */
   #startScreen{position:fixed;inset:0;display:flex;flex-direction:column;
-    align-items:center;justify-content:center;gap:26px;padding:28px;text-align:center;z-index:50;
+    align-items:center;justify-content:center;gap:22px;padding:28px;text-align:center;z-index:50;
     background:
       radial-gradient(120% 90% at 50% -10%, rgba(255,199,44,.07), transparent 55%),
       var(--bg)}
@@ -46,12 +45,11 @@
   .startNote{color:var(--sub);font-size:12.5px}
   #startError{display:none;color:var(--alert);font-size:13.5px;max-width:26em}
 
-  /* ---------- ライブビュー ---------- */
-  #stage{position:fixed;inset:0;overflow:hidden;background:#000;display:none}
+  #stage{position:fixed;inset:0;overflow:hidden;display:none;
+    background:repeating-linear-gradient(45deg,#0A0C0E 0 12px,#14171B 12px 24px)}
   #vwrap{position:absolute;transform-origin:center center}
   #video{width:100%;height:100%;display:block;object-fit:fill;background:#000}
 
-  /* 視野枠(マスク+コーナーブラケット) */
   #frame{position:absolute;pointer-events:none;
     box-shadow:0 0 0 9999px rgba(0,0,0,.58)}
   #frame .corner{position:absolute;width:26px;height:26px;border:3px solid var(--accent)}
@@ -69,7 +67,6 @@
   #grid .gv{width:1px;top:0;bottom:0}
   #grid .gh{height:1px;left:0;right:0}
 
-  /* 上部ステータス */
   #topBar{position:fixed;top:calc(env(safe-area-inset-top) + 10px);left:0;right:0;
     display:flex;justify-content:center;gap:8px;z-index:20;pointer-events:none}
   #readout{background:var(--panel-soft);backdrop-filter:blur(8px);
@@ -79,24 +76,22 @@
 
   #warnBand{position:fixed;top:calc(env(safe-area-inset-top) + 54px);left:50%;
     transform:translateX(-50%);z-index:20;display:none;max-width:92vw;
-    background:rgba(70,20,12,.92);border:1px solid var(--alert);color:#FFD9D2;
+    background:rgba(48,38,6,.92);border:1px solid var(--accent);color:#FFE9AF;
     border-radius:10px;padding:8px 14px;font-size:13px;text-align:center}
 
-  /* 下部コントロール */
   #dock{position:fixed;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + 12px);
-    display:flex;justify-content:center;align-items:center;gap:14px;z-index:20}
+    display:flex;justify-content:center;align-items:center;gap:10px;z-index:20}
   .dockBtn{background:var(--panel);border:1px solid var(--line);border-radius:16px;
-    min-width:72px;padding:10px 12px;display:flex;flex-direction:column;align-items:center;gap:3px;
-    font-size:11.5px;color:var(--ink)}
+    min-width:60px;padding:10px 8px;display:flex;flex-direction:column;align-items:center;gap:3px;
+    font-size:11px;color:var(--ink)}
   .dockBtn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;
     stroke-linecap:round;stroke-linejoin:round}
   .dockBtn.on{border-color:var(--accent);color:var(--accent)}
   #btnShot{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);
-    min-width:84px;font-weight:700}
+    min-width:72px;font-weight:700}
   #btnShot svg{stroke:var(--accent-ink)}
   .dockBtn:active{transform:scale(.95)}
 
-  /* 設定シート */
   #sheet{position:fixed;left:0;right:0;bottom:0;z-index:40;
     background:var(--panel);backdrop-filter:blur(14px);
     border-top:1px solid var(--line);border-radius:18px 18px 0 0;
@@ -125,6 +120,46 @@
     text-align:center;font-size:14px}
   .btnGhost.ok{border-color:var(--accent);color:var(--accent)}
 
+  #crosshair{position:fixed;left:50%;top:50%;width:36px;height:36px;margin:-18px 0 0 -18px;
+    z-index:25;display:none;pointer-events:none}
+  #crosshair::before,#crosshair::after{content:"";position:absolute;background:var(--accent)}
+  #crosshair::before{left:50%;top:0;bottom:0;width:2px;margin-left:-1px}
+  #crosshair::after{top:50%;left:0;right:0;height:2px;margin-top:-1px}
+  #measurePanel{position:fixed;left:12px;right:12px;
+    bottom:calc(env(safe-area-inset-bottom) + 12px);z-index:30;display:none;
+    background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 16px}
+  #mTitle{font-weight:700;margin-bottom:2px}
+  #mSub{font-size:13px;color:var(--sub)}
+  #mLive{font-family:var(--mono);font-size:13px;color:var(--accent);margin-top:4px;min-height:1.4em}
+  #mResult{font-size:13.5px;margin-top:6px;display:none;
+    border-top:1px solid var(--line);padding-top:8px}
+  .mBtns{display:flex;gap:10px;margin-top:10px}
+  .mBtns .btnGhost{padding:11px}
+  #btnMPrimary{background:var(--accent);color:var(--accent-ink);border:none;font-weight:700;
+    flex:1;border-radius:12px;padding:12px;font-size:14px}
+
+  #photoMode{position:fixed;inset:0;z-index:55;display:none;flex-direction:column;background:var(--bg)}
+  #photoMode.open{display:flex}
+  .pHead{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;
+    padding-top:calc(env(safe-area-inset-top) + 12px);border-bottom:1px solid var(--line)}
+  .pHead b{letter-spacing:.05em}
+  #pClose{color:var(--sub);padding:6px 10px}
+  #pCanvasWrap{flex:1;position:relative;min-height:0;
+    background:repeating-linear-gradient(45deg,#0A0C0E 0 12px,#14171B 12px 24px)}
+  #pCanvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+  #pEmpty{position:absolute;inset:0;display:flex;flex-direction:column;gap:14px;
+    align-items:center;justify-content:center;color:var(--sub);text-align:center;padding:24px}
+  .pFoot{border-top:1px solid var(--line);
+    padding:12px 16px calc(env(safe-area-inset-bottom) + 12px);
+    display:flex;flex-direction:column;gap:8px}
+  #pResult{font-size:13.5px;min-height:1.4em}
+  .pRow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .pRow label{font-size:12.5px;color:var(--sub);white-space:nowrap}
+  .pNum{width:84px;background:rgba(255,255,255,.06);border:1px solid var(--line);
+    border-radius:8px;color:var(--ink);padding:6px 8px;font-family:var(--mono);font-size:14px}
+  .pBtn{border:1px solid var(--line);border-radius:12px;padding:10px 16px;font-size:14px}
+  .pBtn.main{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
+
   #toast{position:fixed;left:50%;bottom:120px;transform:translateX(-50%) translateY(10px);
     background:var(--panel);border:1px solid var(--line);border-radius:999px;
     padding:8px 18px;font-size:13px;z-index:60;opacity:0;pointer-events:none;
@@ -134,7 +169,6 @@
 </head>
 <body>
 
-<!-- ============ 開始画面 ============ -->
 <section id="startScreen">
   <svg class="fovGlyph" viewBox="0 0 180 110" aria-hidden="true">
     <g stroke="#FFC72C" stroke-width="2" fill="none">
@@ -150,15 +184,15 @@
   </svg>
   <div>
     <h1 class="startTitle">画角シミュレータ</h1>
-    <p class="startLead">設置予定カメラの「映る範囲」を、お手元のスマートフォンのカメラでその場で確認できます。</p>
+    <p class="startLead">設置予定カメラの「映る範囲」を、お手元のスマートフォンでその場で確認できます。</p>
   </div>
   <div class="configChip" id="startConfig"></div>
   <button class="btnPrimary" id="btnStart">カメラを起動する</button>
-  <p class="startNote">起動時にカメラへのアクセス許可を求められます。<br>本体を<strong>横向き</strong>にしてのご利用を推奨します。</p>
+  <button class="pBtn" id="btnPhotoStart" style="width:min(280px,86%)">写真で判定する(カメラ許可・センサー不要)</button>
+  <p class="startNote">カメラ起動時にはアクセス許可を求められます。</p>
   <p id="startError"></p>
 </section>
 
-<!-- ============ ライブビュー ============ -->
 <div id="stage">
   <div id="vwrap">
     <video id="video" autoplay playsinline muted></video>
@@ -178,6 +212,48 @@
 <div id="topBar"><div id="readout"></div></div>
 <div id="warnBand"></div>
 
+<div id="crosshair"></div>
+<section id="measurePanel" aria-label="角度計測">
+  <div id="mTitle"></div>
+  <div id="mSub"></div>
+  <div id="mLive"></div>
+  <div id="mResult"></div>
+  <div class="mBtns">
+    <button id="btnMPrimary"></button>
+    <button class="btnGhost" id="btnMCancel">終了</button>
+  </div>
+</section>
+
+<section id="photoMode" aria-label="写真判定">
+  <div class="pHead">
+    <b>写真で画角判定</b>
+    <span style="display:flex;gap:8px;align-items:center">
+      <button class="pBtn" id="pPick">別の写真</button>
+      <button id="pClose">閉じる ✕</button>
+    </span>
+  </div>
+  <div id="pCanvasWrap">
+    <canvas id="pCanvas"></canvas>
+    <div id="pEmpty">
+      <p><b>撮り方</b><br>幅のわかる基準物(例:A4用紙=幅297mm)を、メジャーで測った距離(例:1m)の位置に置き、設置予定位置からズームなし(1×)で撮影してください。</p>
+      <p>どの機種・どのカメラで撮った写真でも判定できます。</p>
+      <button class="pBtn main" id="pPick2">写真を選ぶ / 撮影する</button>
+    </div>
+  </div>
+  <div class="pFoot">
+    <div id="pResult"></div>
+    <div class="pRow" id="pCalRow">
+      <label>基準物の幅</label><input type="number" class="pNum" id="pRefW" value="297" min="10" max="20000" step="1"><label>mm</label>
+      <label>距離</label><input type="number" class="pNum" id="pRefD" value="1000" min="100" max="99999" step="10"><label>mm</label>
+      <button class="pBtn main" id="pCalOk">校正を確定</button>
+    </div>
+    <div class="pRow" id="pRangeRow" style="display:none">
+      <button class="pBtn" id="pReCal">基準物の校正をやり直す</button>
+    </div>
+  </div>
+  <input type="file" id="pFile" accept="image/*" hidden>
+</section>
+
 <div id="dock" style="display:none">
   <button class="dockBtn" id="btnLens" title="カメラ切替">
     <svg viewBox="0 0 24 24"><path d="M4 9h3l2-2h6l2 2h3v10H4z"/><circle cx="12" cy="13.5" r="3.2"/><path d="M17 4l2 2-2 2"/></svg>
@@ -191,6 +267,14 @@
     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/></svg>
     <span>撮影</span>
   </button>
+  <button class="dockBtn" id="btnPhoto" title="写真で判定">
+    <svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 15l4-4 4 4 3-3 5 5"/><circle cx="9" cy="9" r="1.4"/></svg>
+    <span>写真</span>
+  </button>
+  <button class="dockBtn" id="btnMeasure" title="角度計測">
+    <svg viewBox="0 0 24 24"><path d="M4 19h16"/><path d="M4 19L18 6"/><path d="M10.5 19a6.5 6.5 0 0 0-2-4.7"/></svg>
+    <span>計測</span>
+  </button>
   <button class="dockBtn" id="btnGrid" title="グリッド">
     <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9.3 4v16M14.6 4v16M4 9.3h16M4 14.6h16"/></svg>
     <span>グリッド</span>
@@ -201,7 +285,6 @@
   </button>
 </div>
 
-<!-- ============ 設定シート ============ -->
 <section id="sheet" aria-label="設定">
   <div class="sheetHead">
     <span class="sheetTitle">設置カメラの設定</span>
@@ -241,7 +324,7 @@
   <div class="field">
     <div class="fieldLabel"><span>スマホ側カメラの水平画角(校正)</span><output id="outPfov"></output></div>
     <input type="range" id="inPfov" min="45" max="125" step="1">
-    <p class="hint">目安:標準カメラ 約65〜72°/超広角(0.5×) 約100〜110°。既知の幅の対象物で枠の一致を確認しながら調整できます。</p>
+    <p class="hint">ライブ表示の枠の精度に関わる設定です(写真判定・角度計測には影響しません)。目安:標準カメラ 約65〜72°/超広角 約100〜110°。</p>
   </div>
 
   <div class="sheetActions">
@@ -256,18 +339,16 @@
 (function(){
   "use strict";
 
-  /* ---------- 状態 ---------- */
   const AR_MAP = {"16:9":16/9, "4:3":4/3, "3:2":3/2, "1:1":1, "9:16":9/16};
   const state = {
     name: "",
-    tfov: 92,          // 設置カメラ 水平画角(°)
+    tfov: 92,
     arLabel: "16:9",
-    pfov: 68,          // スマホ側 長辺方向画角(°)
+    pfov: 68,
     grid: false,
     crop: false
   };
 
-  // URLパラメータ読込 (?fov=92&ar=16:9&pfov=68&name=...)
   try{
     const q = new URLSearchParams(location.search);
     if(q.has("fov")){ const v=parseFloat(q.get("fov")); if(v>=20&&v<=140) state.tfov=v; }
@@ -276,7 +357,6 @@
     if(q.has("name")) state.name=q.get("name").slice(0,40);
   }catch(e){}
 
-  /* ---------- 要素 ---------- */
   const $ = id => document.getElementById(id);
   const startScreen=$("startScreen"), startConfig=$("startConfig"), startError=$("startError");
   const stage=$("stage"), vwrap=$("vwrap"), video=$("video");
@@ -288,66 +368,58 @@
 
   let devices=[], deviceIndex=-1, currentStream=null;
 
-  /* ---------- 数学 ---------- */
   const rad = d => d*Math.PI/180;
   const deg = r => r*180/Math.PI;
 
-  // 対象カメラの垂直画角(°)
   function targetVFov(){
     const ar = AR_MAP[state.arLabel];
     return deg(2*Math.atan(Math.tan(rad(state.tfov)/2)/ar));
   }
 
-  // 映像フレームに対する枠の割合 {fx, fy, over}
   function fractions(){
     const vw=video.videoWidth, vh=video.videoHeight;
     if(!vw||!vh) return null;
     const tanPLong = Math.tan(rad(state.pfov)/2);
     const long=Math.max(vw,vh), short=Math.min(vw,vh);
     const tanPShort = tanPLong*(short/long);
-    const tanPX = (vw>=vh)? tanPLong : tanPShort;  // 映像の幅方向
-    const tanPY = (vw>=vh)? tanPShort : tanPLong;  // 映像の高さ方向
+    const tanPX = (vw>=vh)? tanPLong : tanPShort;
+    const tanPY = (vw>=vh)? tanPShort : tanPLong;
     const tanTH = Math.tan(rad(state.tfov)/2);
     const tanTV = tanTH / AR_MAP[state.arLabel];
     const rx = tanTH/tanPX, ry = tanTV/tanPY;
-    return { fx: Math.min(rx,1), fy: Math.min(ry,1),
-             rawX: rx, rawY: ry, over: (rx>1.001||ry>1.001), portrait: vw<vh };
+    return { rx, ry, over: (rx>1.001||ry>1.001) };
   }
 
-  /* ---------- レイアウト ---------- */
   function layout(){
     const f = fractions();
     if(!f) return;
     const vw=video.videoWidth, vh=video.videoHeight;
     const sw=stage.clientWidth, sh=stage.clientHeight;
-    const base = Math.min(sw/vw, sh/vh);          // contain
-    let s = base;
+    const needW = vw*Math.max(f.rx,1), needH = vh*Math.max(f.ry,1);
+    let s = Math.min(sw/needW, sh/needH);
     if(state.crop){
-      const rw=vw*f.fx*base, rh=vh*f.fy*base;     // 枠のcontain時サイズ
-      s = base*Math.min(sw/rw, sh/rh);            // 枠が画面いっぱいになる倍率
+      s = Math.min(sw/(vw*f.rx), sh/(vh*f.ry));
     }
     const dispW=vw*s, dispH=vh*s;
     vwrap.style.width=dispW+"px";  vwrap.style.height=dispH+"px";
     vwrap.style.left=((sw-dispW)/2)+"px"; vwrap.style.top=((sh-dispH)/2)+"px";
 
-    const fw=dispW*f.fx, fh=dispH*f.fy;
+    const fw=vw*s*f.rx, fh=vh*s*f.ry;
     frame.style.width=fw+"px";  frame.style.height=fh+"px";
     frame.style.left=((sw-fw)/2)+"px"; frame.style.top=((sh-fh)/2)+"px";
 
-    // 読み出し
     const vf = targetVFov();
     readout.innerHTML =
       "<b>"+state.tfov.toFixed(0)+"°</b>×"+vf.toFixed(0)+"° "+
-      state.arLabel+" 倍率 "+(1/Math.max(f.rawX,1e-6)).toFixed(2)+"×";
+      state.arLabel+" 倍率 "+(1/Math.max(f.rx,1e-6)).toFixed(2)+"×";
     frameTab.textContent = (state.name? state.name+" " : "") +
       "視野 "+state.tfov.toFixed(0)+"°/"+state.arLabel;
 
-    // 警告
     if(f.over){
       warnBand.style.display="block";
-      warnBand.textContent = f.portrait
-        ? "設置カメラの方が広角です。端末を横向きにするか、超広角(0.5×)レンズに切り替えてください。"
-        : "設置カメラの方が広角です。「レンズ」ボタンで超広角(0.5×)に切り替えてください。";
+      warnBand.textContent =
+        "設置カメラはスマホより広角です。枠内の縞模様部分は画面外ですが、実際のカメラには映ります。"+
+        "「レンズ」で超広角(0.5×)に切り替えると全体を映像で確認できます。";
     }else{
       warnBand.style.display="none";
     }
@@ -357,7 +429,6 @@
   window.addEventListener("orientationchange", ()=>setTimeout(layout,300));
   video.addEventListener("loadedmetadata", layout);
 
-  /* ---------- カメラ ---------- */
   async function openCamera(constraintsVideo){
     if(currentStream) currentStream.getTracks().forEach(t=>t.stop());
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -413,15 +484,17 @@
     }catch(e){ toast("切替に失敗しました"); }
   }
 
-  /* ---------- 撮影 ---------- */
   async function capture(){
     const f = fractions(); if(!f) return;
     const vw=video.videoWidth, vh=video.videoHeight;
-    const rw=Math.round(vw*f.fx), rh=Math.round(vh*f.fy);
+    const rw=Math.round(vw*f.rx), rh=Math.round(vh*f.ry);
     const cv=document.createElement("canvas"); cv.width=rw; cv.height=rh;
     const cx=cv.getContext("2d");
-    cx.drawImage(video,(vw-rw)/2,(vh-rh)/2,rw,rh,0,0,rw,rh);
-    // 焼き込みラベル
+    cx.fillStyle="#15181B"; cx.fillRect(0,0,rw,rh);
+    const ox=(rw-vw)/2, oy=(rh-vh)/2;
+    const sx=Math.max(0,-ox), sy=Math.max(0,-oy);
+    const dw=Math.min(vw,rw), dh=Math.min(vh,rh);
+    cx.drawImage(video, sx, sy, dw, dh, Math.max(0,ox), Math.max(0,oy), dw, dh);
     const pad=Math.round(rh*0.03), fs=Math.max(14,Math.round(rh*0.035));
     const label=(state.name? state.name+"  ":"")+"HFOV "+state.tfov.toFixed(0)+
                 "° / "+state.arLabel+"  "+new Date().toLocaleString("ja-JP");
@@ -446,6 +519,242 @@
       toast("画像を保存しました");
     },"image/png");
   }
+
+  /* ---------- 角度計測(ジャイロ) ---------- */
+  const M = { active:false, phase:null, marks:{}, yaw:0, lastA:null, pitch:0, gotEvent:false };
+  const crosshair=$("crosshair"), measurePanel=$("measurePanel");
+  const mTitle=$("mTitle"), mSub=$("mSub"), mLive=$("mLive"), mResult=$("mResult");
+  const btnMPrimary=$("btnMPrimary");
+
+  function onOri(e){
+    M.gotEvent=true;
+    if(e.alpha!=null){
+      if(M.lastA==null){ M.lastA=e.alpha; }
+      else{
+        let d=e.alpha-M.lastA;
+        if(d>180)d-=360; if(d<-180)d+=360;
+        M.yaw+=d; M.lastA=e.alpha;
+      }
+    }
+    if(e.beta!=null) M.pitch=e.beta;
+    if(M.active) updateMeasureLive();
+  }
+  async function ensureSensor(){
+    if(typeof DeviceOrientationEvent!=="undefined" &&
+       typeof DeviceOrientationEvent.requestPermission==="function"){
+      try{ if(await DeviceOrientationEvent.requestPermission()!=="granted") return false; }
+      catch(e){ return false; }
+    }
+    if(!ensureSensor._bound){
+      window.addEventListener("deviceorientation", onOri);
+      ensureSensor._bound=true;
+    }
+    return true;
+  }
+  function updateMeasureLive(){
+    let t="";
+    if(M.phase==="R" && M.marks.L!=null) t="左端から "+Math.abs(M.yaw-M.marks.L).toFixed(1)+"°";
+    if(M.phase==="B" && M.marks.T!=null) t="上端から "+Math.abs(M.pitch-M.marks.T).toFixed(1)+"°";
+    mLive.textContent=t;
+  }
+  function setUI(title,sub,btn){ mTitle.textContent=title; mSub.textContent=sub;
+    btnMPrimary.textContent=btn; mLive.textContent=""; }
+  function stepTo(p){
+    M.phase=p;
+    if(p==="L") setUI("① 左端に合わせる",
+      "映したい範囲の左端に、画面中央の十字を合わせて記録してください。","左端を記録");
+    if(p==="R") setUI("② 右端に合わせる",
+      "その場で体ごと右へ回し、範囲の右端に十字を合わせて記録してください。","右端を記録");
+    if(p==="HDONE") setUI("水平方向の計測結果",
+      "続けて上下方向も確認できます。終了する場合は「終了」を押してください。","上下も計測する");
+    if(p==="T") setUI("③ 上端に合わせる",
+      "端末は縦向きのまま上に傾け、範囲の上端に十字を合わせて記録してください。","上端を記録");
+    if(p==="B") setUI("④ 下端に合わせる",
+      "下に傾けて、範囲の下端に十字を合わせて記録してください。","下端を記録");
+    if(p==="DONE") setUI("計測完了",
+      "結果を確認してください。「終了」で通常表示に戻ります。","もう一度計測");
+  }
+  function lensSuggest(need){
+    const ps=[{f:"12mm",a:27},{f:"8mm",a:39},{f:"6mm",a:50},{f:"4mm",a:70},{f:"3.6mm",a:81},{f:"2.8mm",a:103}];
+    const ok=ps.find(p=>p.a>=need);
+    return ok? "焦点距離"+ok.f+"(約"+ok.a+"°)以上の広角レンズなら収まります。"
+             : "一般的な単一カメラの画角を超えています。設置位置を離す・複数台・パンチルトをご検討ください。";
+  }
+  function showHResult(){
+    const need=Math.abs(M.marks.R-M.marks.L);
+    const ok=need<=state.tfov;
+    mResult.style.display="block";
+    mResult.innerHTML="必要水平画角: <b style='color:var(--accent)'>約"+need.toFixed(0)+"°</b>"+
+      " / 設定中のカメラ: "+state.tfov.toFixed(0)+"°<br>"+
+      (ok? "→ <b>この位置から収まります。</b>"
+         : "→ <b>収まりません。</b>"+lensSuggest(need));
+  }
+  function showVResult(){
+    const needV=Math.abs(M.marks.B-M.marks.T);
+    const tv=targetVFov(); const ok=needV<=tv;
+    mResult.innerHTML+="<br>必要垂直画角: <b style='color:var(--accent)'>約"+needV.toFixed(0)+"°</b>"+
+      " / カメラ垂直画角: "+tv.toFixed(0)+"° → "+(ok?"<b>収まります。</b>":"<b>収まりません。</b>");
+  }
+  async function startMeasure(){
+    if(!(await ensureSensor())){ toast("このブラウザでは方位センサーを利用できません"); return; }
+    M.active=true; M.marks={}; M.gotEvent=false;
+    crosshair.style.display="block"; measurePanel.style.display="block";
+    dock.style.display="none"; sheet.classList.remove("open");
+    mResult.style.display="none"; mResult.innerHTML="";
+    stepTo("L");
+    setTimeout(()=>{ if(M.active && !M.gotEvent)
+      toast("センサー値を取得できません(この端末は非対応の可能性があります)"); },1500);
+  }
+  function endMeasure(){
+    M.active=false; crosshair.style.display="none";
+    measurePanel.style.display="none"; dock.style.display="flex";
+  }
+  btnMPrimary.addEventListener("click", ()=>{
+    if(M.phase==="L"){ M.marks.L=M.yaw; stepTo("R"); }
+    else if(M.phase==="R"){ M.marks.R=M.yaw; showHResult(); stepTo("HDONE"); }
+    else if(M.phase==="HDONE"){ stepTo("T"); }
+    else if(M.phase==="T"){ M.marks.T=M.pitch; stepTo("B"); }
+    else if(M.phase==="B"){ M.marks.B=M.pitch; showVResult(); stepTo("DONE"); }
+    else if(M.phase==="DONE"){ startMeasure(); }
+  });
+  $("btnMCancel").addEventListener("click", endMeasure);
+  $("btnMeasure").addEventListener("click", startMeasure);
+
+  /* ---------- 写真判定モード(基準物で校正/メタデータ不使用) ---------- */
+  const P={img:null,W:0,H:0,fpx:0,phase:"cal",c1:0,c2:0,m1:0,m2:0,drag:null};
+  const photoMode=$("photoMode"), pCanvas=$("pCanvas"), pEmpty=$("pEmpty");
+  const pResult=$("pResult"), pRefW=$("pRefW"), pRefD=$("pRefD");
+  const pCalRow=$("pCalRow"), pRangeRow=$("pRangeRow"), pFile=$("pFile");
+
+  function pLoad(file){
+    const url=URL.createObjectURL(file);
+    const img=new Image();
+    img.onload=()=>{
+      P.img=img; P.W=img.naturalWidth; P.H=img.naturalHeight;
+      P.c1=P.W*0.38; P.c2=P.W*0.62;
+      P.m1=P.W*0.20; P.m2=P.W*0.80;
+      P.fpx=0;
+      pEmpty.style.display="none";
+      pSetPhase("cal");
+    };
+    img.onerror=()=>toast("この画像は表示できません。JPEG/PNGでお試しください");
+    img.src=url;
+  }
+  function pSetPhase(ph){
+    P.phase=ph;
+    pCalRow.style.display = (ph==="cal") ? "flex" : "none";
+    pRangeRow.style.display = (ph==="range") ? "flex" : "none";
+    if(ph==="cal"){
+      pResult.innerHTML=
+        "オレンジのマーカーを<b>基準物の左端・右端</b>に合わせ、実際の幅と距離を入力して「校正を確定」を押してください。";
+    }
+    pDraw();
+  }
+  function pGeom(){
+    const c=pCanvas, r=c.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
+    const cw=Math.round(r.width*dpr), ch=Math.round(r.height*dpr);
+    if(c.width!==cw||c.height!==ch){ c.width=cw; c.height=ch; }
+    const k=Math.min(c.width/P.W, c.height/P.H);
+    return {k, ox:(c.width-P.W*k)/2, oy:(c.height-P.H*k)/2};
+  }
+  function pFpxSolve(x1,x2,theta){
+    const cx=P.W/2;
+    const span=fp=>Math.atan((Math.max(x1,x2)-cx)/fp)-Math.atan((Math.min(x1,x2)-cx)/fp);
+    let lo=P.W*0.05, hi=P.W*200;
+    if(span(lo)<theta) return 0;
+    for(let i=0;i<70;i++){ const mid=(lo+hi)/2; if(span(mid)>theta) lo=mid; else hi=mid; }
+    return (lo+hi)/2;
+  }
+  function pAngle(x){ return Math.atan((x-P.W/2)/P.fpx); }
+  function pDraw(){
+    if(!P.img) return;
+    const g=pGeom(), cx=pCanvas.getContext("2d"), dpr=window.devicePixelRatio||1;
+    cx.clearRect(0,0,pCanvas.width,pCanvas.height);
+    cx.drawImage(P.img,g.ox,g.oy,P.W*g.k,P.H*g.k);
+    const toCX=x=>g.ox+x*g.k;
+    const drawMarker=(x,lab,color,ink)=>{
+      const X=toCX(x), yMid=g.oy+P.H*g.k/2;
+      cx.strokeStyle=color; cx.lineWidth=3*dpr;
+      cx.beginPath(); cx.moveTo(X,g.oy); cx.lineTo(X,g.oy+P.H*g.k); cx.stroke();
+      cx.fillStyle=color;
+      cx.beginPath(); cx.arc(X,yMid,15*dpr,0,Math.PI*2); cx.fill();
+      cx.fillStyle=ink; cx.font="700 "+(13*dpr)+"px sans-serif";
+      cx.textAlign="center"; cx.textBaseline="middle";
+      cx.fillText(lab,X,yMid);
+    };
+    if(P.phase==="cal"){
+      drawMarker(P.c1,"基","#FF9E45","#2A1500");
+      drawMarker(P.c2,"基","#FF9E45","#2A1500");
+      return;
+    }
+    const a1=pAngle(P.m1), a2=pAngle(P.m2), mid=(a1+a2)/2;
+    const xL=P.W/2+P.fpx*Math.tan(mid-rad(state.tfov)/2);
+    const xR=P.W/2+P.fpx*Math.tan(mid+rad(state.tfov)/2);
+    const fh=2*P.fpx*Math.tan(rad(targetVFov())/2);
+    cx.strokeStyle="#FFC72C"; cx.lineWidth=3*dpr;
+    cx.strokeRect(toCX(xL), g.oy+(P.H-fh)/2*g.k, (xR-xL)*g.k, fh*g.k);
+    drawMarker(P.m1,"左","#4FC3F7","#08222E");
+    drawMarker(P.m2,"右","#4FC3F7","#08222E");
+    const need=deg(Math.abs(a2-a1));
+    const hfov=deg(2*Math.atan((P.W/2)/P.fpx));
+    const ok=need<=state.tfov;
+    pResult.innerHTML="必要水平画角 <b style='color:var(--accent)'>約"+need.toFixed(0)+"°</b>"+
+      " / 設定中のカメラ "+state.tfov.toFixed(0)+"° → "+
+      (ok? "<b>収まります。</b>黄色い枠が実際に映る範囲です。"
+         : "<b>収まりません。</b>"+lensSuggest(need))+
+      " <span style='color:var(--sub)'>(写真の水平画角 約"+hfov.toFixed(0)+"°)</span>";
+  }
+  function pClient2Img(e){
+    const g=pGeom(), r=pCanvas.getBoundingClientRect();
+    return ((e.clientX-r.left)*(pCanvas.width/r.width)-g.ox)/g.k;
+  }
+  pCanvas.addEventListener("pointerdown",e=>{
+    if(!P.img) return;
+    const x=pClient2Img(e);
+    const keys=(P.phase==="cal")?["c1","c2"]:["m1","m2"];
+    P.drag=(Math.abs(x-P[keys[0]])<=Math.abs(x-P[keys[1]]))?keys[0]:keys[1];
+    pCanvas.setPointerCapture(e.pointerId);
+    pDragMove(e);
+  });
+  function pDragMove(e){
+    if(!P.drag||!P.img) return;
+    P[P.drag]=Math.max(0,Math.min(P.W,pClient2Img(e)));
+    pDraw();
+  }
+  pCanvas.addEventListener("pointermove",pDragMove);
+  pCanvas.addEventListener("pointerup",()=>P.drag=null);
+  pCanvas.addEventListener("pointercancel",()=>P.drag=null);
+
+  $("pCalOk").addEventListener("click",()=>{
+    if(!P.img){ toast("先に写真を読み込んでください"); return; }
+    const w=parseFloat(pRefW.value), d=parseFloat(pRefD.value);
+    if(!(w>0)||!(d>0)){ toast("基準物の幅と距離を入力してください"); return; }
+    if(Math.abs(P.c2-P.c1)<P.W*0.01){ toast("マーカーの間隔が狭すぎます"); return; }
+    const theta=2*Math.atan(w/(2*d));
+    const fpx=pFpxSolve(P.c1,P.c2,theta);
+    if(!fpx){ toast("校正できません。幅・距離の値とマーカー位置を確認してください"); return; }
+    P.fpx=fpx;
+    pSetPhase("range");
+  });
+  $("pReCal").addEventListener("click",()=>pSetPhase("cal"));
+
+  function openPhoto(){
+    photoMode.classList.add("open");
+    dock.style.display="none";
+    pEmpty.style.display=P.img?"none":"flex";
+    pDraw();
+  }
+  function closePhoto(){
+    photoMode.classList.remove("open");
+    if(stage.style.display==="block") dock.style.display="flex";
+  }
+  $("btnPhoto").addEventListener("click",openPhoto);
+  $("btnPhotoStart").addEventListener("click",openPhoto);
+  $("pClose").addEventListener("click",closePhoto);
+  $("pPick").addEventListener("click",()=>pFile.click());
+  $("pPick2").addEventListener("click",()=>pFile.click());
+  pFile.addEventListener("change",()=>{ if(pFile.files[0]) pLoad(pFile.files[0]); pFile.value=""; });
+  window.addEventListener("resize",()=>{ if(photoMode.classList.contains("open")) pDraw(); });
 
   /* ---------- UI ---------- */
   function toast(msg){
