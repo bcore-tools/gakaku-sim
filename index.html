@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0B0D0F">
+<title>画角シミュレータ</title>
+<style>
+  :root{
+    --bg:#0B0D0F;
+    --panel:rgba(16,19,22,.90);
+    --panel-soft:rgba(16,19,22,.72);
+    --ink:#EEF1F2;
+    --sub:#9AA4AB;
+    --accent:#FFC72C;
+    --accent-ink:#1A1503;
+    --line:rgba(255,255,255,.14);
+    --alert:#FF6B57;
+    --mono:ui-monospace,"SFMono-Regular","Roboto Mono","Osaka-Mono","MS Gothic",monospace;
+    --sans:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;overscroll-behavior:none}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);
+       font-size:15px;line-height:1.6;overflow:hidden;
+       padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+  button{font-family:inherit;font-size:inherit;color:inherit;background:none;border:none;cursor:pointer}
+  button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  /* ---------- 開始画面 ---------- */
+  #startScreen{position:fixed;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:26px;padding:28px;text-align:center;z-index:50;
+    background:
+      radial-gradient(120% 90% at 50% -10%, rgba(255,199,44,.07), transparent 55%),
+      var(--bg)}
+  .fovGlyph{width:180px;height:110px;flex:none}
+  .startTitle{font-size:26px;font-weight:700;letter-spacing:.06em}
+  .startLead{color:var(--sub);max-width:30em}
+  .configChip{display:inline-flex;flex-wrap:wrap;justify-content:center;gap:6px 14px;
+    border:1px solid var(--line);border-radius:10px;padding:10px 16px;
+    font-family:var(--mono);font-size:13px;color:var(--ink)}
+  .configChip .k{color:var(--sub);font-family:var(--sans)}
+  .btnPrimary{background:var(--accent);color:var(--accent-ink);font-weight:700;
+    padding:15px 34px;border-radius:999px;font-size:16px;letter-spacing:.04em}
+  .btnPrimary:active{transform:scale(.97)}
+  .startNote{color:var(--sub);font-size:12.5px}
+  #startError{display:none;color:var(--alert);font-size:13.5px;max-width:26em}
+
+  /* ---------- ライブビュー ---------- */
+  #stage{position:fixed;inset:0;overflow:hidden;background:#000;display:none}
+  #vwrap{position:absolute;transform-origin:center center}
+  #video{width:100%;height:100%;display:block;object-fit:fill;background:#000}
+
+  /* 視野枠(マスク+コーナーブラケット) */
+  #frame{position:absolute;pointer-events:none;
+    box-shadow:0 0 0 9999px rgba(0,0,0,.58)}
+  #frame .corner{position:absolute;width:26px;height:26px;border:3px solid var(--accent)}
+  #frame .c-tl{left:-3px;top:-3px;border-right:none;border-bottom:none}
+  #frame .c-tr{right:-3px;top:-3px;border-left:none;border-bottom:none}
+  #frame .c-bl{left:-3px;bottom:-3px;border-right:none;border-top:none}
+  #frame .c-br{right:-3px;bottom:-3px;border-left:none;border-top:none}
+  #frame .edge{position:absolute;inset:0;border:1px solid rgba(255,199,44,.55)}
+  #frameTab{position:absolute;left:0;top:0;transform:translateY(calc(-100% - 6px));
+    background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:12px;
+    padding:3px 10px;border-radius:6px;white-space:nowrap;max-width:80vw;
+    overflow:hidden;text-overflow:ellipsis}
+  #grid{position:absolute;inset:0;pointer-events:none;display:none}
+  #grid .gv,#grid .gh{position:absolute;background:rgba(255,255,255,.28)}
+  #grid .gv{width:1px;top:0;bottom:0}
+  #grid .gh{height:1px;left:0;right:0}
+
+  /* 上部ステータス */
+  #topBar{position:fixed;top:calc(env(safe-area-inset-top) + 10px);left:0;right:0;
+    display:flex;justify-content:center;gap:8px;z-index:20;pointer-events:none}
+  #readout{background:var(--panel-soft);backdrop-filter:blur(8px);
+    border:1px solid var(--line);border-radius:999px;padding:6px 16px;
+    font-family:var(--mono);font-size:13px;letter-spacing:.02em}
+  #readout b{color:var(--accent);font-weight:600}
+
+  #warnBand{position:fixed;top:calc(env(safe-area-inset-top) + 54px);left:50%;
+    transform:translateX(-50%);z-index:20;display:none;max-width:92vw;
+    background:rgba(70,20,12,.92);border:1px solid var(--alert);color:#FFD9D2;
+    border-radius:10px;padding:8px 14px;font-size:13px;text-align:center}
+
+  /* 下部コントロール */
+  #dock{position:fixed;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + 12px);
+    display:flex;justify-content:center;align-items:center;gap:14px;z-index:20}
+  .dockBtn{background:var(--panel);border:1px solid var(--line);border-radius:16px;
+    min-width:72px;padding:10px 12px;display:flex;flex-direction:column;align-items:center;gap:3px;
+    font-size:11.5px;color:var(--ink)}
+  .dockBtn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;
+    stroke-linecap:round;stroke-linejoin:round}
+  .dockBtn.on{border-color:var(--accent);color:var(--accent)}
+  #btnShot{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);
+    min-width:84px;font-weight:700}
+  #btnShot svg{stroke:var(--accent-ink)}
+  .dockBtn:active{transform:scale(.95)}
+
+  /* 設定シート */
+  #sheet{position:fixed;left:0;right:0;bottom:0;z-index:40;
+    background:var(--panel);backdrop-filter:blur(14px);
+    border-top:1px solid var(--line);border-radius:18px 18px 0 0;
+    padding:18px 20px calc(env(safe-area-inset-bottom) + 18px);
+    max-height:78vh;overflow-y:auto;
+    transform:translateY(105%);transition:transform .28s cubic-bezier(.3,.9,.3,1)}
+  #sheet.open{transform:translateY(0)}
+  @media (prefers-reduced-motion:reduce){#sheet{transition:none}}
+  .sheetHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .sheetTitle{font-weight:700;letter-spacing:.05em}
+  #btnCloseSheet{color:var(--sub);font-size:14px;padding:6px 10px}
+  .field{margin-bottom:16px}
+  .fieldLabel{display:flex;justify-content:space-between;align-items:baseline;
+    font-size:13px;color:var(--sub);margin-bottom:6px}
+  .fieldLabel output{font-family:var(--mono);color:var(--ink);font-size:14px}
+  input[type=range]{width:100%;accent-color:var(--accent);height:32px}
+  input[type=text]{width:100%;background:rgba(255,255,255,.06);border:1px solid var(--line);
+    border-radius:10px;padding:10px 12px;color:var(--ink);font-size:15px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{border:1px solid var(--line);border-radius:999px;padding:7px 14px;
+    font-size:13px;color:var(--ink);background:rgba(255,255,255,.04)}
+  .chip.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
+  .hint{font-size:12px;color:var(--sub);margin-top:6px}
+  .sheetActions{display:flex;gap:10px;margin-top:6px}
+  .btnGhost{flex:1;border:1px solid var(--line);border-radius:12px;padding:12px;
+    text-align:center;font-size:14px}
+  .btnGhost.ok{border-color:var(--accent);color:var(--accent)}
+
+  #toast{position:fixed;left:50%;bottom:120px;transform:translateX(-50%) translateY(10px);
+    background:var(--panel);border:1px solid var(--line);border-radius:999px;
+    padding:8px 18px;font-size:13px;z-index:60;opacity:0;pointer-events:none;
+    transition:opacity .2s,transform .2s}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- ============ 開始画面 ============ -->
+<section id="startScreen">
+  <svg class="fovGlyph" viewBox="0 0 180 110" aria-hidden="true">
+    <g stroke="#FFC72C" stroke-width="2" fill="none">
+      <line x1="20" y1="96" x2="168" y2="14"/>
+      <line x1="20" y1="96" x2="168" y2="96"/>
+      <path d="M 74 96 A 54 54 0 0 0 64 66"/>
+    </g>
+    <g stroke="rgba(255,255,255,.35)" stroke-width="1.5" fill="none">
+      <rect x="6" y="88" width="16" height="16" rx="3"/>
+      <circle cx="14" cy="96" r="3.5"/>
+    </g>
+    <text x="86" y="84" fill="#FFC72C" font-size="13" font-family="monospace">θ</text>
+  </svg>
+  <div>
+    <h1 class="startTitle">画角シミュレータ</h1>
+    <p class="startLead">設置予定カメラの「映る範囲」を、お手元のスマートフォンのカメラでその場で確認できます。</p>
+  </div>
+  <div class="configChip" id="startConfig"></div>
+  <button class="btnPrimary" id="btnStart">カメラを起動する</button>
+  <p class="startNote">起動時にカメラへのアクセス許可を求められます。<br>本体を<strong>横向き</strong>にしてのご利用を推奨します。</p>
+  <p id="startError"></p>
+</section>
+
+<!-- ============ ライブビュー ============ -->
+<div id="stage">
+  <div id="vwrap">
+    <video id="video" autoplay playsinline muted></video>
+  </div>
+  <div id="frame">
+    <span class="edge"></span>
+    <span class="corner c-tl"></span><span class="corner c-tr"></span>
+    <span class="corner c-bl"></span><span class="corner c-br"></span>
+    <div id="grid">
+      <span class="gv" style="left:33.33%"></span><span class="gv" style="left:66.66%"></span>
+      <span class="gh" style="top:33.33%"></span><span class="gh" style="top:66.66%"></span>
+    </div>
+    <span id="frameTab"></span>
+  </div>
+</div>
+
+<div id="topBar"><div id="readout"></div></div>
+<div id="warnBand"></div>
+
+<div id="dock" style="display:none">
+  <button class="dockBtn" id="btnLens" title="カメラ切替">
+    <svg viewBox="0 0 24 24"><path d="M4 9h3l2-2h6l2 2h3v10H4z"/><circle cx="12" cy="13.5" r="3.2"/><path d="M17 4l2 2-2 2"/></svg>
+    <span>レンズ</span>
+  </button>
+  <button class="dockBtn" id="btnCrop" title="カメラ視点表示">
+    <svg viewBox="0 0 24 24"><path d="M7 3v14h14"/><path d="M3 7h14v14"/></svg>
+    <span>カメラ視点</span>
+  </button>
+  <button class="dockBtn" id="btnShot" title="撮影">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/></svg>
+    <span>撮影</span>
+  </button>
+  <button class="dockBtn" id="btnGrid" title="グリッド">
+    <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9.3 4v16M14.6 4v16M4 9.3h16M4 14.6h16"/></svg>
+    <span>グリッド</span>
+  </button>
+  <button class="dockBtn" id="btnSheet" title="設定">
+    <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 12h4M12 12h8M4 17h13M20 17h0"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18.5" cy="17" r="2"/></svg>
+    <span>設定</span>
+  </button>
+</div>
+
+<!-- ============ 設定シート ============ -->
+<section id="sheet" aria-label="設定">
+  <div class="sheetHead">
+    <span class="sheetTitle">設置カメラの設定</span>
+    <button id="btnCloseSheet">閉じる ✕</button>
+  </div>
+
+  <div class="field">
+    <div class="fieldLabel"><span>カメラ名(任意)</span></div>
+    <input type="text" id="inName" placeholder="例:AXIS M2036-LE" maxlength="40">
+  </div>
+
+  <div class="field">
+    <div class="fieldLabel"><span>水平画角</span><output id="outFov"></output></div>
+    <input type="range" id="inFov" min="20" max="140" step="1">
+    <div class="chips" id="fovPresets" style="margin-top:8px">
+      <button class="chip" data-fov="103">2.8mm ≈103°</button>
+      <button class="chip" data-fov="81">3.6mm ≈81°</button>
+      <button class="chip" data-fov="70">4mm ≈70°</button>
+      <button class="chip" data-fov="50">6mm ≈50°</button>
+      <button class="chip" data-fov="39">8mm ≈39°</button>
+      <button class="chip" data-fov="27">12mm ≈27°</button>
+    </div>
+    <p class="hint">焦点距離の目安は 1/2.8型センサーの場合です。カメラの仕様書の水平画角(HFOV)を優先してください。</p>
+  </div>
+
+  <div class="field">
+    <div class="fieldLabel"><span>アスペクト比</span></div>
+    <div class="chips" id="arChips">
+      <button class="chip" data-ar="16:9">16:9</button>
+      <button class="chip" data-ar="4:3">4:3</button>
+      <button class="chip" data-ar="3:2">3:2</button>
+      <button class="chip" data-ar="1:1">1:1</button>
+      <button class="chip" data-ar="9:16">9:16(縦)</button>
+    </div>
+  </div>
+
+  <div class="field">
+    <div class="fieldLabel"><span>スマホ側カメラの水平画角(校正)</span><output id="outPfov"></output></div>
+    <input type="range" id="inPfov" min="45" max="125" step="1">
+    <p class="hint">目安:標準カメラ 約65〜72°/超広角(0.5×) 約100〜110°。既知の幅の対象物で枠の一致を確認しながら調整できます。</p>
+  </div>
+
+  <div class="sheetActions">
+    <button class="btnGhost" id="btnCopyUrl">この設定のURLをコピー</button>
+    <button class="btnGhost ok" id="btnDone">完了</button>
+  </div>
+</section>
+
+<div id="toast" role="status"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- 状態 ---------- */
+  const AR_MAP = {"16:9":16/9, "4:3":4/3, "3:2":3/2, "1:1":1, "9:16":9/16};
+  const state = {
+    name: "",
+    tfov: 92,          // 設置カメラ 水平画角(°)
+    arLabel: "16:9",
+    pfov: 68,          // スマホ側 長辺方向画角(°)
+    grid: false,
+    crop: false
+  };
+
+  // URLパラメータ読込 (?fov=92&ar=16:9&pfov=68&name=...)
+  try{
+    const q = new URLSearchParams(location.search);
+    if(q.has("fov")){ const v=parseFloat(q.get("fov")); if(v>=20&&v<=140) state.tfov=v; }
+    if(q.has("pfov")){ const v=parseFloat(q.get("pfov")); if(v>=45&&v<=125) state.pfov=v; }
+    if(q.has("ar") && AR_MAP[q.get("ar")]) state.arLabel=q.get("ar");
+    if(q.has("name")) state.name=q.get("name").slice(0,40);
+  }catch(e){}
+
+  /* ---------- 要素 ---------- */
+  const $ = id => document.getElementById(id);
+  const startScreen=$("startScreen"), startConfig=$("startConfig"), startError=$("startError");
+  const stage=$("stage"), vwrap=$("vwrap"), video=$("video");
+  const frame=$("frame"), frameTab=$("frameTab"), grid=$("grid");
+  const readout=$("readout"), warnBand=$("warnBand"), dock=$("dock");
+  const sheet=$("sheet");
+  const inName=$("inName"), inFov=$("inFov"), outFov=$("outFov");
+  const inPfov=$("inPfov"), outPfov=$("outPfov");
+
+  let devices=[], deviceIndex=-1, currentStream=null;
+
+  /* ---------- 数学 ---------- */
+  const rad = d => d*Math.PI/180;
+  const deg = r => r*180/Math.PI;
+
+  // 対象カメラの垂直画角(°)
+  function targetVFov(){
+    const ar = AR_MAP[state.arLabel];
+    return deg(2*Math.atan(Math.tan(rad(state.tfov)/2)/ar));
+  }
+
+  // 映像フレームに対する枠の割合 {fx, fy, over}
+  function fractions(){
+    const vw=video.videoWidth, vh=video.videoHeight;
+    if(!vw||!vh) return null;
+    const tanPLong = Math.tan(rad(state.pfov)/2);
+    const long=Math.max(vw,vh), short=Math.min(vw,vh);
+    const tanPShort = tanPLong*(short/long);
+    const tanPX = (vw>=vh)? tanPLong : tanPShort;  // 映像の幅方向
+    const tanPY = (vw>=vh)? tanPShort : tanPLong;  // 映像の高さ方向
+    const tanTH = Math.tan(rad(state.tfov)/2);
+    const tanTV = tanTH / AR_MAP[state.arLabel];
+    const rx = tanTH/tanPX, ry = tanTV/tanPY;
+    return { fx: Math.min(rx,1), fy: Math.min(ry,1),
+             rawX: rx, rawY: ry, over: (rx>1.001||ry>1.001), portrait: vw<vh };
+  }
+
+  /* ---------- レイアウト ---------- */
+  function layout(){
+    const f = fractions();
+    if(!f) return;
+    const vw=video.videoWidth, vh=video.videoHeight;
+    const sw=stage.clientWidth, sh=stage.clientHeight;
+    const base = Math.min(sw/vw, sh/vh);          // contain
+    let s = base;
+    if(state.crop){
+      const rw=vw*f.fx*base, rh=vh*f.fy*base;     // 枠のcontain時サイズ
+      s = base*Math.min(sw/rw, sh/rh);            // 枠が画面いっぱいになる倍率
+    }
+    const dispW=vw*s, dispH=vh*s;
+    vwrap.style.width=dispW+"px";  vwrap.style.height=dispH+"px";
+    vwrap.style.left=((sw-dispW)/2)+"px"; vwrap.style.top=((sh-dispH)/2)+"px";
+
+    const fw=dispW*f.fx, fh=dispH*f.fy;
+    frame.style.width=fw+"px";  frame.style.height=fh+"px";
+    frame.style.left=((sw-fw)/2)+"px"; frame.style.top=((sh-fh)/2)+"px";
+
+    // 読み出し
+    const vf = targetVFov();
+    readout.innerHTML =
+      "<b>"+state.tfov.toFixed(0)+"°</b>×"+vf.toFixed(0)+"° "+
+      state.arLabel+" 倍率 "+(1/Math.max(f.rawX,1e-6)).toFixed(2)+"×";
+    frameTab.textContent = (state.name? state.name+" " : "") +
+      "視野 "+state.tfov.toFixed(0)+"°/"+state.arLabel;
+
+    // 警告
+    if(f.over){
+      warnBand.style.display="block";
+      warnBand.textContent = f.portrait
+        ? "設置カメラの方が広角です。端末を横向きにするか、超広角(0.5×)レンズに切り替えてください。"
+        : "設置カメラの方が広角です。「レンズ」ボタンで超広角(0.5×)に切り替えてください。";
+    }else{
+      warnBand.style.display="none";
+    }
+  }
+
+  window.addEventListener("resize", layout);
+  window.addEventListener("orientationchange", ()=>setTimeout(layout,300));
+  video.addEventListener("loadedmetadata", layout);
+
+  /* ---------- カメラ ---------- */
+  async function openCamera(constraintsVideo){
+    if(currentStream) currentStream.getTracks().forEach(t=>t.stop());
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: constraintsVideo, audio:false
+    });
+    currentStream = stream;
+    video.srcObject = stream;
+    await video.play().catch(()=>{});
+    layout();
+  }
+
+  async function start(){
+    startError.style.display="none";
+    if(!window.isSecureContext){
+      showStartError("この機能はHTTPS(または localhost)でのみ動作します。https:// のURLで開いてください。");
+      return;
+    }
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      showStartError("このブラウザはカメラ機能に対応していません。SafariまたはChromeでお試しください。");
+      return;
+    }
+    try{
+      await openCamera({facingMode:{ideal:"environment"},
+                        width:{ideal:1920}, height:{ideal:1080}});
+      const all = await navigator.mediaDevices.enumerateDevices();
+      devices = all.filter(d=>d.kind==="videoinput");
+      const cur = currentStream.getVideoTracks()[0].getSettings().deviceId;
+      deviceIndex = Math.max(0, devices.findIndex(d=>d.deviceId===cur));
+      startScreen.style.display="none";
+      stage.style.display="block";
+      dock.style.display="flex";
+      layout();
+    }catch(err){
+      if(err && (err.name==="NotAllowedError"||err.name==="SecurityError")){
+        showStartError("カメラへのアクセスが許可されませんでした。ブラウザの設定からこのサイトのカメラを許可して、再読み込みしてください。");
+      }else if(err && err.name==="NotFoundError"){
+        showStartError("利用できるカメラが見つかりませんでした。");
+      }else{
+        showStartError("カメラを起動できませんでした("+(err&&err.name||"不明なエラー")+")。");
+      }
+    }
+  }
+  function showStartError(msg){ startError.textContent=msg; startError.style.display="block"; }
+
+  async function cycleLens(){
+    if(devices.length<2){ toast("切替できるカメラがありません"); return; }
+    deviceIndex = (deviceIndex+1)%devices.length;
+    try{
+      await openCamera({deviceId:{exact:devices[deviceIndex].deviceId},
+                        width:{ideal:1920}, height:{ideal:1080}});
+      const label = devices[deviceIndex].label || ("カメラ "+(deviceIndex+1));
+      toast(label.slice(0,28));
+    }catch(e){ toast("切替に失敗しました"); }
+  }
+
+  /* ---------- 撮影 ---------- */
+  async function capture(){
+    const f = fractions(); if(!f) return;
+    const vw=video.videoWidth, vh=video.videoHeight;
+    const rw=Math.round(vw*f.fx), rh=Math.round(vh*f.fy);
+    const cv=document.createElement("canvas"); cv.width=rw; cv.height=rh;
+    const cx=cv.getContext("2d");
+    cx.drawImage(video,(vw-rw)/2,(vh-rh)/2,rw,rh,0,0,rw,rh);
+    // 焼き込みラベル
+    const pad=Math.round(rh*0.03), fs=Math.max(14,Math.round(rh*0.035));
+    const label=(state.name? state.name+"  ":"")+"HFOV "+state.tfov.toFixed(0)+
+                "° / "+state.arLabel+"  "+new Date().toLocaleString("ja-JP");
+    cx.font="600 "+fs+"px "+"'Roboto Mono',monospace";
+    const tw=cx.measureText(label).width;
+    cx.fillStyle="rgba(0,0,0,.55)";
+    cx.fillRect(pad-6, rh-pad-fs-8, tw+12, fs+12);
+    cx.fillStyle="#FFC72C";
+    cx.fillText(label, pad, rh-pad);
+
+    cv.toBlob(async blob=>{
+      if(!blob){ toast("画像の生成に失敗しました"); return; }
+      const file=new File([blob],"gakaku_"+Date.now()+".png",{type:"image/png"});
+      if(navigator.canShare && navigator.canShare({files:[file]})){
+        try{ await navigator.share({files:[file],title:"画角シミュレーション"}); return; }
+        catch(e){ if(e && e.name==="AbortError") return; }
+      }
+      const a=document.createElement("a");
+      a.href=URL.createObjectURL(blob); a.download=file.name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+      toast("画像を保存しました");
+    },"image/png");
+  }
+
+  /* ---------- UI ---------- */
+  function toast(msg){
+    const t=$("toast"); t.textContent=msg; t.classList.add("show");
+    clearTimeout(toast._tm); toast._tm=setTimeout(()=>t.classList.remove("show"),2200);
+  }
+
+  function syncSheet(){
+    inName.value=state.name;
+    inFov.value=state.tfov;  outFov.textContent=state.tfov.toFixed(0)+"°";
+    inPfov.value=state.pfov; outPfov.textContent=state.pfov.toFixed(0)+"°";
+    document.querySelectorAll("#arChips .chip").forEach(c=>
+      c.classList.toggle("on", c.dataset.ar===state.arLabel));
+    document.querySelectorAll("#fovPresets .chip").forEach(c=>
+      c.classList.toggle("on", Math.abs(parseFloat(c.dataset.fov)-state.tfov)<0.5));
+  }
+  function syncStartChip(){
+    startConfig.innerHTML =
+      (state.name? "<span>"+escapeHtml(state.name)+"</span>":"")+
+      "<span><span class='k'>水平画角 </span>"+state.tfov.toFixed(0)+"°</span>"+
+      "<span><span class='k'>比率 </span>"+state.arLabel+"</span>";
+  }
+  function escapeHtml(s){return s.replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));}
+
+  $("btnStart").addEventListener("click", start);
+  $("btnLens").addEventListener("click", cycleLens);
+  $("btnShot").addEventListener("click", capture);
+  $("btnGrid").addEventListener("click", e=>{
+    state.grid=!state.grid;
+    grid.style.display=state.grid?"block":"none";
+    e.currentTarget.classList.toggle("on",state.grid);
+  });
+  $("btnCrop").addEventListener("click", e=>{
+    state.crop=!state.crop;
+    e.currentTarget.classList.toggle("on",state.crop);
+    toast(state.crop?"カメラ視点表示":"全体表示");
+    layout();
+  });
+  $("btnSheet").addEventListener("click", ()=>{ syncSheet(); sheet.classList.add("open"); });
+  $("btnCloseSheet").addEventListener("click", ()=>sheet.classList.remove("open"));
+  $("btnDone").addEventListener("click", ()=>sheet.classList.remove("open"));
+
+  inName.addEventListener("input", ()=>{ state.name=inName.value; layout(); syncStartChip(); });
+  inFov.addEventListener("input", ()=>{ state.tfov=parseFloat(inFov.value);
+    outFov.textContent=state.tfov.toFixed(0)+"°"; syncSheet(); layout(); syncStartChip(); });
+  inPfov.addEventListener("input", ()=>{ state.pfov=parseFloat(inPfov.value);
+    outPfov.textContent=state.pfov.toFixed(0)+"°"; layout(); });
+
+  document.querySelectorAll("#fovPresets .chip").forEach(c=>
+    c.addEventListener("click", ()=>{ state.tfov=parseFloat(c.dataset.fov);
+      syncSheet(); layout(); syncStartChip(); }));
+  document.querySelectorAll("#arChips .chip").forEach(c=>
+    c.addEventListener("click", ()=>{ state.arLabel=c.dataset.ar;
+      syncSheet(); layout(); syncStartChip(); }));
+
+  $("btnCopyUrl").addEventListener("click", async ()=>{
+    const q=new URLSearchParams();
+    q.set("fov", state.tfov.toFixed(0));
+    q.set("ar", state.arLabel);
+    q.set("pfov", state.pfov.toFixed(0));
+    if(state.name) q.set("name", state.name);
+    const url=location.origin+location.pathname+"?"+q.toString();
+    try{ await navigator.clipboard.writeText(url); toast("URLをコピーしました"); }
+    catch(e){ prompt("このURLをコピーしてください", url); }
+  });
+
+  syncStartChip();
+  syncSheet();
+})();
+</script>
+</body>
+</html>
