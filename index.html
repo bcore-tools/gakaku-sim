@@ -249,15 +249,11 @@
       <button class="pBtn main" id="pCalOk">校正を確定</button>
     </div>
     <div class="pRow" id="pRangeRow" style="display:none">
-      <label>設置カメラ 水平画角</label>
+      <label>設置カメラ 水平</label>
       <input type="number" class="pNum" id="pTfov" min="20" max="140" step="1"><label>°</label>
-      <select id="pAr" class="pNum" style="width:auto">
-        <option value="16:9">16:9</option>
-        <option value="4:3">4:3</option>
-        <option value="3:2">3:2</option>
-        <option value="1:1">1:1</option>
-        <option value="9:16">9:16</option>
-      </select>
+      <label>垂直</label>
+      <input type="number" class="pNum" id="pVfov" min="10" max="120" step="1"><label>°</label>
+      <label style="color:var(--sub)">対角 <span id="pDiag" style="font-family:var(--mono);color:var(--ink)"></span></label>
       <span style="flex:1"></span>
       <button class="pBtn" id="pReCal">校正をやり直す</button>
     </div>
@@ -324,18 +320,13 @@
       <button class="chip" data-fov="39">8mm ≈39°</button>
       <button class="chip" data-fov="27">12mm ≈27°</button>
     </div>
-    <p class="hint">焦点距離の目安は 1/2.8型センサーの場合です。カメラの仕様書ではなく、実機写真から実測した水平画角の使用を推奨します。</p>
+    <p class="hint">焦点距離の目安は 1/2.8型センサーの場合です。カメラの仕様書ではなく、実機写真から実測した画角の使用を推奨します。</p>
   </div>
 
   <div class="field">
-    <div class="fieldLabel"><span>アスペクト比</span></div>
-    <div class="chips" id="arChips">
-      <button class="chip" data-ar="16:9">16:9</button>
-      <button class="chip" data-ar="4:3">4:3</button>
-      <button class="chip" data-ar="3:2">3:2</button>
-      <button class="chip" data-ar="1:1">1:1</button>
-      <button class="chip" data-ar="9:16">9:16(縦)</button>
-    </div>
+    <div class="fieldLabel"><span>垂直画角</span><output id="outVfov"></output></div>
+    <input type="range" id="inVfov" min="10" max="120" step="1">
+    <p class="hint">対角画角(水平・垂直から自動計算): <output id="outDiag" style="font-family:var(--mono);color:var(--ink)"></output></p>
   </div>
 
   <div class="field">
@@ -360,19 +351,11 @@
   const state = {
     name: "",
     tfov: 92,
-    arLabel: "16:9",
+    tvfov: 60,
     pfov: 68,
     grid: false,
     crop: false
   };
-
-  try{
-    const q = new URLSearchParams(location.search);
-    if(q.has("fov")){ const v=parseFloat(q.get("fov")); if(v>=20&&v<=140) state.tfov=v; }
-    if(q.has("pfov")){ const v=parseFloat(q.get("pfov")); if(v>=45&&v<=125) state.pfov=v; }
-    if(q.has("ar") && AR_MAP[q.get("ar")]) state.arLabel=q.get("ar");
-    if(q.has("name")) state.name=q.get("name").slice(0,40);
-  }catch(e){}
 
   const $ = id => document.getElementById(id);
   const startScreen=$("startScreen"), startConfig=$("startConfig"), startError=$("startError");
@@ -382,15 +365,26 @@
   const sheet=$("sheet");
   const inName=$("inName"), inFov=$("inFov"), outFov=$("outFov");
   const inPfov=$("inPfov"), outPfov=$("outPfov");
+  const inVfov=$("inVfov"), outVfov=$("outVfov"), outDiag=$("outDiag");
 
   let devices=[], deviceIndex=-1, currentStream=null;
 
   const rad = d => d*Math.PI/180;
   const deg = r => r*180/Math.PI;
 
-  function targetVFov(){
-    const ar = AR_MAP[state.arLabel];
-    return deg(2*Math.atan(Math.tan(rad(state.tfov)/2)/ar));
+  try{
+    const q = new URLSearchParams(location.search);
+    if(q.has("fov")){ const v=parseFloat(q.get("fov")); if(v>=20&&v<=140) state.tfov=v; }
+    if(q.has("pfov")){ const v=parseFloat(q.get("pfov")); if(v>=45&&v<=125) state.pfov=v; }
+    if(q.has("ar") && AR_MAP[q.get("ar")])
+      state.tvfov=deg(2*Math.atan(Math.tan(rad(state.tfov)/2)/AR_MAP[q.get("ar")]));
+    if(q.has("vfov")){ const v=parseFloat(q.get("vfov")); if(v>=10&&v<=120) state.tvfov=v; }
+    if(q.has("name")) state.name=q.get("name").slice(0,40);
+  }catch(e){}
+
+  function targetVFov(){ return state.tvfov; }
+  function diagFov(){
+    return deg(2*Math.atan(Math.hypot(Math.tan(rad(state.tfov)/2),Math.tan(rad(state.tvfov)/2))));
   }
 
   function fractions(){
@@ -402,7 +396,7 @@
     const tanPX = (vw>=vh)? tanPLong : tanPShort;
     const tanPY = (vw>=vh)? tanPShort : tanPLong;
     const tanTH = Math.tan(rad(state.tfov)/2);
-    const tanTV = tanTH / AR_MAP[state.arLabel];
+    const tanTV = Math.tan(rad(state.tvfov)/2);
     const rx = tanTH/tanPX, ry = tanTV/tanPY;
     return { rx, ry, over: (rx>1.001||ry>1.001) };
   }
@@ -427,10 +421,10 @@
 
     const vf = targetVFov();
     readout.innerHTML =
-      "<b>"+state.tfov.toFixed(0)+"°</b>×"+vf.toFixed(0)+"° "+
-      state.arLabel+" 倍率 "+(1/Math.max(f.rx,1e-6)).toFixed(2)+"×";
+      "<b>"+state.tfov.toFixed(0)+"°×"+vf.toFixed(0)+"°</b> 対角"+diagFov().toFixed(0)+
+      "° 倍率 "+(1/Math.max(f.rx,1e-6)).toFixed(2)+"×";
     frameTab.textContent = (state.name? state.name+" " : "") +
-      "視野 "+state.tfov.toFixed(0)+"°/"+state.arLabel;
+      "視野 "+state.tfov.toFixed(0)+"°×"+vf.toFixed(0)+"°";
 
     if(f.over){
       warnBand.style.display="block";
@@ -514,7 +508,7 @@
     cx.drawImage(video, sx, sy, dw, dh, Math.max(0,ox), Math.max(0,oy), dw, dh);
     const pad=Math.round(rh*0.03), fs=Math.max(14,Math.round(rh*0.035));
     const label=(state.name? state.name+"  ":"")+"HFOV "+state.tfov.toFixed(0)+
-                "° / "+state.arLabel+"  "+new Date().toLocaleString("ja-JP");
+                "° VFOV "+state.tvfov.toFixed(0)+"°  "+new Date().toLocaleString("ja-JP");
     cx.font="600 "+fs+"px "+"'Roboto Mono',monospace";
     const tw=cx.measureText(label).width;
     cx.fillStyle="rgba(0,0,0,.55)";
@@ -694,27 +688,30 @@
     cx.clearRect(0,0,pCanvas.width,pCanvas.height);
     cx.drawImage(P.img,g.ox,g.oy,P.W*g.k,P.H*g.k);
     const toCX=x=>g.ox+x*g.k, toCY=y=>g.oy+y*g.k;
-    const marker=(cxp,cyp,x1,y1,x2,y2,lab)=>{
-      cx.strokeStyle="#4FC3F7"; cx.lineWidth=3*dpr;
-      cx.beginPath(); cx.moveTo(x1,y1); cx.lineTo(x2,y2); cx.stroke();
-      cx.fillStyle="#4FC3F7";
-      cx.beginPath(); cx.arc(cxp,cyp,15*dpr,0,Math.PI*2); cx.fill();
-      cx.fillStyle="#08222E"; cx.font="700 "+(13*dpr)+"px sans-serif";
+    const tab=(x,y,lab,color,ink)=>{
+      const w=(lab.length>1?46:30)*dpr, h=20*dpr, r=6*dpr;
+      cx.fillStyle=color;
+      if(cx.roundRect){ cx.beginPath(); cx.roundRect(x-w/2,y-h/2,w,h,r); cx.fill(); }
+      else cx.fillRect(x-w/2,y-h/2,w,h);
+      cx.fillStyle=ink; cx.font="700 "+(12*dpr)+"px sans-serif";
       cx.textAlign="center"; cx.textBaseline="middle";
-      cx.fillText(lab,cxp,cyp);
+      cx.fillText(lab,x,y);
+    };
+    const vline=(x,lab,color,ink)=>{
+      const X=toCX(x);
+      cx.strokeStyle=color; cx.lineWidth=2.5*dpr;
+      cx.beginPath(); cx.moveTo(X,g.oy); cx.lineTo(X,g.oy+P.H*g.k); cx.stroke();
+      tab(X,g.oy+14*dpr,lab,color,ink);
+    };
+    const hline=(y,lab,color,ink)=>{
+      const Y=toCY(y);
+      cx.strokeStyle=color; cx.lineWidth=2.5*dpr;
+      cx.beginPath(); cx.moveTo(g.ox,Y); cx.lineTo(g.ox+P.W*g.k,Y); cx.stroke();
+      tab(g.ox+22*dpr,Y,lab,color,ink);
     };
     if(P.phase==="cal"){
-      const orange=(x)=>{
-        const X=toCX(x), yMid=g.oy+P.H*g.k/2;
-        cx.strokeStyle="#FF9E45"; cx.lineWidth=3*dpr;
-        cx.beginPath(); cx.moveTo(X,g.oy); cx.lineTo(X,g.oy+P.H*g.k); cx.stroke();
-        cx.fillStyle="#FF9E45";
-        cx.beginPath(); cx.arc(X,yMid,15*dpr,0,Math.PI*2); cx.fill();
-        cx.fillStyle="#2A1500"; cx.font="700 "+(13*dpr)+"px sans-serif";
-        cx.textAlign="center"; cx.textBaseline="middle";
-        cx.fillText("基",X,yMid);
-      };
-      orange(P.c1); orange(P.c2);
+      vline(P.c1,"基準","#FF9E45","#2A1500");
+      vline(P.c2,"基準","#FF9E45","#2A1500");
       return;
     }
     const a1=pAngle(P.m1), a2=pAngle(P.m2), midH=(a1+a2)/2;
@@ -726,11 +723,10 @@
     const yBot=P.H/2-P.fpx*Math.tan(midV-rad(tv)/2);
     cx.strokeStyle="#FFC72C"; cx.lineWidth=3*dpr;
     cx.strokeRect(toCX(xL), toCY(yTop), (xR-xL)*g.k, (yBot-yTop)*g.k);
-    const yMid=g.oy+P.H*g.k/2, xHandle=g.ox+P.W*g.k*0.15;
-    marker(toCX(P.m1),yMid, toCX(P.m1),g.oy, toCX(P.m1),g.oy+P.H*g.k, "左");
-    marker(toCX(P.m2),yMid, toCX(P.m2),g.oy, toCX(P.m2),g.oy+P.H*g.k, "右");
-    marker(xHandle,toCY(P.t), g.ox,toCY(P.t), g.ox+P.W*g.k,toCY(P.t), "上");
-    marker(xHandle,toCY(P.b), g.ox,toCY(P.b), g.ox+P.W*g.k,toCY(P.b), "下");
+    vline(P.m1,"左","#4FC3F7","#08222E");
+    vline(P.m2,"右","#4FC3F7","#08222E");
+    hline(P.t,"上","#4FC3F7","#08222E");
+    hline(P.b,"下","#4FC3F7","#08222E");
     const needH=deg(Math.abs(a2-a1));
     let needV=deg(Math.abs(aT-aB));
     let tiltNote="";
@@ -803,14 +799,21 @@
   });
   $("pReCal").addEventListener("click",()=>pSetPhase("cal"));
 
-  const pTfov=$("pTfov"), pAr=$("pAr");
-  function pSyncSettings(){ pTfov.value=state.tfov.toFixed(0); pAr.value=state.arLabel; }
+  const pTfov=$("pTfov"), pVfov=$("pVfov"), pDiag=$("pDiag");
+  function pSyncSettings(){
+    pTfov.value=state.tfov.toFixed(0);
+    pVfov.value=state.tvfov.toFixed(0);
+    pDiag.textContent=diagFov().toFixed(0)+"°";
+  }
   pTfov.addEventListener("input",()=>{
     const v=parseFloat(pTfov.value);
-    if(v>=20&&v<=140){ state.tfov=v; syncSheet(); syncStartChip(); pDraw(); if(video.videoWidth) layout(); }
+    if(v>=20&&v<=140){ state.tfov=v; syncSheet(); syncStartChip();
+      pDiag.textContent=diagFov().toFixed(0)+"°"; pDraw(); if(video.videoWidth) layout(); }
   });
-  pAr.addEventListener("change",()=>{
-    state.arLabel=pAr.value; syncSheet(); syncStartChip(); pDraw(); if(video.videoWidth) layout();
+  pVfov.addEventListener("input",()=>{
+    const v=parseFloat(pVfov.value);
+    if(v>=10&&v<=120){ state.tvfov=v; syncSheet(); syncStartChip();
+      pDiag.textContent=diagFov().toFixed(0)+"°"; pDraw(); if(video.videoWidth) layout(); }
   });
   pHOn.addEventListener("change",()=>{
     [pHCam,pHShot,pHDist].forEach(i=>i.disabled=!pHOn.checked);
@@ -847,8 +850,8 @@
     inName.value=state.name;
     inFov.value=state.tfov;  outFov.textContent=state.tfov.toFixed(0)+"°";
     inPfov.value=state.pfov; outPfov.textContent=state.pfov.toFixed(0)+"°";
-    document.querySelectorAll("#arChips .chip").forEach(c=>
-      c.classList.toggle("on", c.dataset.ar===state.arLabel));
+    inVfov.value=state.tvfov; outVfov.textContent=state.tvfov.toFixed(0)+"°";
+    outDiag.textContent=diagFov().toFixed(0)+"°";
     document.querySelectorAll("#fovPresets .chip").forEach(c=>
       c.classList.toggle("on", Math.abs(parseFloat(c.dataset.fov)-state.tfov)<0.5));
   }
@@ -856,7 +859,7 @@
     startConfig.innerHTML =
       (state.name? "<span>"+escapeHtml(state.name)+"</span>":"")+
       "<span><span class='k'>水平画角 </span>"+state.tfov.toFixed(0)+"°</span>"+
-      "<span><span class='k'>比率 </span>"+state.arLabel+"</span>";
+      "<span><span class='k'>垂直 </span>"+state.tvfov.toFixed(0)+"°</span>";
   }
   function escapeHtml(s){return s.replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));}
 
@@ -880,21 +883,22 @@
 
   inName.addEventListener("input", ()=>{ state.name=inName.value; layout(); syncStartChip(); });
   inFov.addEventListener("input", ()=>{ state.tfov=parseFloat(inFov.value);
-    outFov.textContent=state.tfov.toFixed(0)+"°"; syncSheet(); layout(); syncStartChip(); });
+    outFov.textContent=state.tfov.toFixed(0)+"°"; syncSheet(); layout(); syncStartChip();
+    if(photoMode.classList.contains("open")) pDraw(); });
+  inVfov.addEventListener("input", ()=>{ state.tvfov=parseFloat(inVfov.value);
+    syncSheet(); layout(); syncStartChip();
+    if(photoMode.classList.contains("open")) pDraw(); });
   inPfov.addEventListener("input", ()=>{ state.pfov=parseFloat(inPfov.value);
     outPfov.textContent=state.pfov.toFixed(0)+"°"; layout(); });
 
   document.querySelectorAll("#fovPresets .chip").forEach(c=>
     c.addEventListener("click", ()=>{ state.tfov=parseFloat(c.dataset.fov);
       syncSheet(); layout(); syncStartChip(); }));
-  document.querySelectorAll("#arChips .chip").forEach(c=>
-    c.addEventListener("click", ()=>{ state.arLabel=c.dataset.ar;
-      syncSheet(); layout(); syncStartChip(); }));
 
   $("btnCopyUrl").addEventListener("click", async ()=>{
     const q=new URLSearchParams();
     q.set("fov", state.tfov.toFixed(0));
-    q.set("ar", state.arLabel);
+    q.set("vfov", state.tvfov.toFixed(0));
     q.set("pfov", state.pfov.toFixed(0));
     if(state.name) q.set("name", state.name);
     const url=location.origin+location.pathname+"?"+q.toString();
