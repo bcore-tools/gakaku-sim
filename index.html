@@ -157,6 +157,7 @@
   .pRow label{font-size:12.5px;color:var(--sub);white-space:nowrap}
   .pNum{width:84px;background:rgba(255,255,255,.06);border:1px solid var(--line);
     border-radius:8px;color:var(--ink);padding:6px 8px;font-family:var(--mono);font-size:14px}
+  .pNum:disabled{opacity:.4}
   .pBtn{border:1px solid var(--line);border-radius:12px;padding:10px 16px;font-size:14px}
   .pBtn.main{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
 
@@ -260,6 +261,12 @@
       <span style="flex:1"></span>
       <button class="pBtn" id="pReCal">校正をやり直す</button>
     </div>
+    <div class="pRow" id="pHeightRow" style="display:none">
+      <label><input type="checkbox" id="pHOn" style="accent-color:var(--accent)"> 高さ補正</label>
+      <label>設置高さ</label><input type="number" class="pNum" id="pHCam" value="5.0" min="0" max="99" step="0.1" disabled><label>m</label>
+      <label>撮影高さ</label><input type="number" class="pNum" id="pHShot" value="1.5" min="0" max="99" step="0.1" disabled><label>m</label>
+      <label>対象距離</label><input type="number" class="pNum" id="pHDist" value="20" min="1" max="999" step="1" disabled><label>m</label>
+    </div>
   </div>
   <input type="file" id="pFile" accept="image/*" hidden>
 </section>
@@ -317,7 +324,7 @@
       <button class="chip" data-fov="39">8mm ≈39°</button>
       <button class="chip" data-fov="27">12mm ≈27°</button>
     </div>
-    <p class="hint">焦点距離の目安は 1/2.8型センサーの場合です。カメラの仕様書の水平画角(HFOV)を優先してください。</p>
+    <p class="hint">焦点距離の目安は 1/2.8型センサーの場合です。カメラの仕様書ではなく、実機写真から実測した水平画角の使用を推奨します。</p>
   </div>
 
   <div class="field">
@@ -631,10 +638,12 @@
   $("btnMeasure").addEventListener("click", startMeasure);
 
   /* ---------- 写真判定モード(基準物で校正/メタデータ不使用) ---------- */
-  const P={img:null,W:0,H:0,fpx:0,phase:"cal",c1:0,c2:0,m1:0,m2:0,drag:null};
+  const P={img:null,W:0,H:0,fpx:0,phase:"cal",c1:0,c2:0,m1:0,m2:0,t:0,b:0,drag:null};
   const photoMode=$("photoMode"), pCanvas=$("pCanvas"), pEmpty=$("pEmpty");
   const pResult=$("pResult"), pRefW=$("pRefW"), pRefD=$("pRefD");
   const pCalRow=$("pCalRow"), pRangeRow=$("pRangeRow"), pFile=$("pFile");
+  const pHeightRow=$("pHeightRow"), pHOn=$("pHOn");
+  const pHCam=$("pHCam"), pHShot=$("pHShot"), pHDist=$("pHDist");
 
   function pLoad(file){
     const url=URL.createObjectURL(file);
@@ -643,6 +652,7 @@
       P.img=img; P.W=img.naturalWidth; P.H=img.naturalHeight;
       P.c1=P.W*0.38; P.c2=P.W*0.62;
       P.m1=P.W*0.20; P.m2=P.W*0.80;
+      P.t=P.H*0.25;  P.b=P.H*0.75;
       P.fpx=0;
       pEmpty.style.display="none";
       pSetPhase("cal");
@@ -654,6 +664,7 @@
     P.phase=ph;
     pCalRow.style.display = (ph==="cal") ? "flex" : "none";
     pRangeRow.style.display = (ph==="range") ? "flex" : "none";
+    pHeightRow.style.display = (ph==="range") ? "flex" : "none";
     if(ph==="cal"){
       pResult.innerHTML=
         "オレンジのマーカーを<b>基準物の左端・右端</b>に合わせ、実際の幅と距離を入力して「校正を確定」を押してください。";
@@ -676,59 +687,103 @@
     return (lo+hi)/2;
   }
   function pAngle(x){ return Math.atan((x-P.W/2)/P.fpx); }
+  function pAngleY(y){ return Math.atan((P.H/2-y)/P.fpx); }
   function pDraw(){
     if(!P.img) return;
     const g=pGeom(), cx=pCanvas.getContext("2d"), dpr=window.devicePixelRatio||1;
     cx.clearRect(0,0,pCanvas.width,pCanvas.height);
     cx.drawImage(P.img,g.ox,g.oy,P.W*g.k,P.H*g.k);
-    const toCX=x=>g.ox+x*g.k;
-    const drawMarker=(x,lab,color,ink)=>{
-      const X=toCX(x), yMid=g.oy+P.H*g.k/2;
-      cx.strokeStyle=color; cx.lineWidth=3*dpr;
-      cx.beginPath(); cx.moveTo(X,g.oy); cx.lineTo(X,g.oy+P.H*g.k); cx.stroke();
-      cx.fillStyle=color;
-      cx.beginPath(); cx.arc(X,yMid,15*dpr,0,Math.PI*2); cx.fill();
-      cx.fillStyle=ink; cx.font="700 "+(13*dpr)+"px sans-serif";
+    const toCX=x=>g.ox+x*g.k, toCY=y=>g.oy+y*g.k;
+    const marker=(cxp,cyp,x1,y1,x2,y2,lab)=>{
+      cx.strokeStyle="#4FC3F7"; cx.lineWidth=3*dpr;
+      cx.beginPath(); cx.moveTo(x1,y1); cx.lineTo(x2,y2); cx.stroke();
+      cx.fillStyle="#4FC3F7";
+      cx.beginPath(); cx.arc(cxp,cyp,15*dpr,0,Math.PI*2); cx.fill();
+      cx.fillStyle="#08222E"; cx.font="700 "+(13*dpr)+"px sans-serif";
       cx.textAlign="center"; cx.textBaseline="middle";
-      cx.fillText(lab,X,yMid);
+      cx.fillText(lab,cxp,cyp);
     };
     if(P.phase==="cal"){
-      drawMarker(P.c1,"基","#FF9E45","#2A1500");
-      drawMarker(P.c2,"基","#FF9E45","#2A1500");
+      const orange=(x)=>{
+        const X=toCX(x), yMid=g.oy+P.H*g.k/2;
+        cx.strokeStyle="#FF9E45"; cx.lineWidth=3*dpr;
+        cx.beginPath(); cx.moveTo(X,g.oy); cx.lineTo(X,g.oy+P.H*g.k); cx.stroke();
+        cx.fillStyle="#FF9E45";
+        cx.beginPath(); cx.arc(X,yMid,15*dpr,0,Math.PI*2); cx.fill();
+        cx.fillStyle="#2A1500"; cx.font="700 "+(13*dpr)+"px sans-serif";
+        cx.textAlign="center"; cx.textBaseline="middle";
+        cx.fillText("基",X,yMid);
+      };
+      orange(P.c1); orange(P.c2);
       return;
     }
-    const a1=pAngle(P.m1), a2=pAngle(P.m2), mid=(a1+a2)/2;
-    const xL=P.W/2+P.fpx*Math.tan(mid-rad(state.tfov)/2);
-    const xR=P.W/2+P.fpx*Math.tan(mid+rad(state.tfov)/2);
-    const fh=2*P.fpx*Math.tan(rad(targetVFov())/2);
+    const a1=pAngle(P.m1), a2=pAngle(P.m2), midH=(a1+a2)/2;
+    const aT=pAngleY(P.t), aB=pAngleY(P.b), midV=(aT+aB)/2;
+    const xL=P.W/2+P.fpx*Math.tan(midH-rad(state.tfov)/2);
+    const xR=P.W/2+P.fpx*Math.tan(midH+rad(state.tfov)/2);
+    const tv=targetVFov();
+    const yTop=P.H/2-P.fpx*Math.tan(midV+rad(tv)/2);
+    const yBot=P.H/2-P.fpx*Math.tan(midV-rad(tv)/2);
     cx.strokeStyle="#FFC72C"; cx.lineWidth=3*dpr;
-    cx.strokeRect(toCX(xL), g.oy+(P.H-fh)/2*g.k, (xR-xL)*g.k, fh*g.k);
-    drawMarker(P.m1,"左","#4FC3F7","#08222E");
-    drawMarker(P.m2,"右","#4FC3F7","#08222E");
-    const need=deg(Math.abs(a2-a1));
-    const hfov=deg(2*Math.atan((P.W/2)/P.fpx));
-    const ok=need<=state.tfov;
-    pResult.innerHTML="必要水平画角 <b style='color:var(--accent)'>約"+need.toFixed(0)+"°</b>"+
-      " / 設定中のカメラ "+state.tfov.toFixed(0)+"° → "+
-      (ok? "<b>収まります。</b>黄色い枠が実際に映る範囲です。"
-         : "<b>収まりません。</b>"+lensSuggest(need))+
-      " <span style='color:var(--sub)'>(写真の水平画角 約"+hfov.toFixed(0)+"°)</span>";
+    cx.strokeRect(toCX(xL), toCY(yTop), (xR-xL)*g.k, (yBot-yTop)*g.k);
+    const yMid=g.oy+P.H*g.k/2, xHandle=g.ox+P.W*g.k*0.15;
+    marker(toCX(P.m1),yMid, toCX(P.m1),g.oy, toCX(P.m1),g.oy+P.H*g.k, "左");
+    marker(toCX(P.m2),yMid, toCX(P.m2),g.oy, toCX(P.m2),g.oy+P.H*g.k, "右");
+    marker(xHandle,toCY(P.t), g.ox,toCY(P.t), g.ox+P.W*g.k,toCY(P.t), "上");
+    marker(xHandle,toCY(P.b), g.ox,toCY(P.b), g.ox+P.W*g.k,toCY(P.b), "下");
+    const needH=deg(Math.abs(a2-a1));
+    let needV=deg(Math.abs(aT-aB));
+    let tiltNote="";
+    if(pHOn.checked){
+      const Hc=parseFloat(pHCam.value), hs=parseFloat(pHShot.value), L=parseFloat(pHDist.value);
+      if(Hc>=0&&hs>=0&&L>0){
+        const topH=hs+L*Math.tan(Math.max(aT,aB));
+        const botH=hs+L*Math.tan(Math.min(aT,aB));
+        const bT=Math.atan((topH-Hc)/L), bB=Math.atan((botH-Hc)/L);
+        needV=deg(bT-bB);
+        const tilt=-deg((bT+bB)/2);
+        tiltNote="(推奨チルト:"+(tilt>=0?"俯角":"仰角")+" 約"+Math.abs(tilt).toFixed(0)+"°)";
+      }
+    }
+    const okH=needH<=state.tfov, okV=needV<=tv;
+    pResult.innerHTML=
+      "必要画角 <b style='color:var(--accent)'>約"+needH.toFixed(0)+"°</b>(水平)× "+
+      "<b style='color:var(--accent)'>約"+needV.toFixed(0)+"°</b>(垂直"+(pHOn.checked?"・高さ補正":"")+")"+
+      " / カメラ "+state.tfov.toFixed(0)+"°×"+tv.toFixed(0)+"°<br>"+
+      "水平: "+(okH?"<b>収まります</b>":"<b>収まりません。</b>"+lensSuggest(needH))+
+      " / 垂直: "+(okV?"<b>収まります</b>":"<b>収まりません</b>")+" "+tiltNote+
+      " <span style='color:var(--sub)'>(写真の水平画角 約"+deg(2*Math.atan((P.W/2)/P.fpx)).toFixed(0)+"°)</span>";
   }
   function pClient2Img(e){
     const g=pGeom(), r=pCanvas.getBoundingClientRect();
-    return ((e.clientX-r.left)*(pCanvas.width/r.width)-g.ox)/g.k;
+    return {
+      x:((e.clientX-r.left)*(pCanvas.width/r.width)-g.ox)/g.k,
+      y:((e.clientY-r.top)*(pCanvas.height/r.height)-g.oy)/g.k
+    };
   }
   pCanvas.addEventListener("pointerdown",e=>{
     if(!P.img) return;
-    const x=pClient2Img(e);
-    const keys=(P.phase==="cal")?["c1","c2"]:["m1","m2"];
-    P.drag=(Math.abs(x-P[keys[0]])<=Math.abs(x-P[keys[1]]))?keys[0]:keys[1];
+    const pt=pClient2Img(e);
+    let cands;
+    if(P.phase==="cal"){
+      cands=[["c1",Math.abs(pt.x-P.c1)],["c2",Math.abs(pt.x-P.c2)]];
+    }else{
+      cands=[["m1",Math.abs(pt.x-P.m1)],["m2",Math.abs(pt.x-P.m2)],
+             ["t",Math.abs(pt.y-P.t)],["b",Math.abs(pt.y-P.b)]];
+    }
+    cands.sort((a,b)=>a[1]-b[1]);
+    P.drag=cands[0][0];
     pCanvas.setPointerCapture(e.pointerId);
     pDragMove(e);
   });
   function pDragMove(e){
     if(!P.drag||!P.img) return;
-    P[P.drag]=Math.max(0,Math.min(P.W,pClient2Img(e)));
+    const pt=pClient2Img(e);
+    if(P.drag==="t"||P.drag==="b"){
+      P[P.drag]=Math.max(0,Math.min(P.H,pt.y));
+    }else{
+      P[P.drag]=Math.max(0,Math.min(P.W,pt.x));
+    }
     pDraw();
   }
   pCanvas.addEventListener("pointermove",pDragMove);
@@ -757,6 +812,11 @@
   pAr.addEventListener("change",()=>{
     state.arLabel=pAr.value; syncSheet(); syncStartChip(); pDraw(); if(video.videoWidth) layout();
   });
+  pHOn.addEventListener("change",()=>{
+    [pHCam,pHShot,pHDist].forEach(i=>i.disabled=!pHOn.checked);
+    pDraw();
+  });
+  [pHCam,pHShot,pHDist].forEach(i=>i.addEventListener("input",pDraw));
 
   function openPhoto(){
     photoMode.classList.add("open");
