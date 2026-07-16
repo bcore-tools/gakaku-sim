@@ -235,7 +235,7 @@
   <div id="pCanvasWrap">
     <canvas id="pCanvas"></canvas>
     <div id="pEmpty">
-      <p><b>撮り方</b><br>幅のわかる基準物(例:A4用紙=幅297mm)を、メジャーで測った距離(例:1m)の位置に置き、設置予定位置からズームなし(1×)で撮影してください。</p>
+      <p><b>撮り方</b><br>幅のわかる基準物(例:A4用紙=幅297mm)を、メジャーで測った距離(例:1m)の位置にカメラへ正対させて置き、設置予定位置からズームなし(1×)で撮影してください。</p>
       <p>どの機種・どのカメラで撮った写真でも判定できます。</p>
       <button class="pBtn main" id="pPick2">写真を選ぶ / 撮影する</button>
     </div>
@@ -248,7 +248,17 @@
       <button class="pBtn main" id="pCalOk">校正を確定</button>
     </div>
     <div class="pRow" id="pRangeRow" style="display:none">
-      <button class="pBtn" id="pReCal">基準物の校正をやり直す</button>
+      <label>設置カメラ 水平画角</label>
+      <input type="number" class="pNum" id="pTfov" min="20" max="140" step="1"><label>°</label>
+      <select id="pAr" class="pNum" style="width:auto">
+        <option value="16:9">16:9</option>
+        <option value="4:3">4:3</option>
+        <option value="3:2">3:2</option>
+        <option value="1:1">1:1</option>
+        <option value="9:16">9:16</option>
+      </select>
+      <span style="flex:1"></span>
+      <button class="pBtn" id="pReCal">校正をやり直す</button>
     </div>
   </div>
   <input type="file" id="pFile" accept="image/*" hidden>
@@ -738,10 +748,21 @@
   });
   $("pReCal").addEventListener("click",()=>pSetPhase("cal"));
 
+  const pTfov=$("pTfov"), pAr=$("pAr");
+  function pSyncSettings(){ pTfov.value=state.tfov.toFixed(0); pAr.value=state.arLabel; }
+  pTfov.addEventListener("input",()=>{
+    const v=parseFloat(pTfov.value);
+    if(v>=20&&v<=140){ state.tfov=v; syncSheet(); syncStartChip(); pDraw(); if(video.videoWidth) layout(); }
+  });
+  pAr.addEventListener("change",()=>{
+    state.arLabel=pAr.value; syncSheet(); syncStartChip(); pDraw(); if(video.videoWidth) layout();
+  });
+
   function openPhoto(){
     photoMode.classList.add("open");
     dock.style.display="none";
     pEmpty.style.display=P.img?"none":"flex";
+    pSyncSettings();
     pDraw();
   }
   function closePhoto(){
