@@ -95,27 +95,37 @@
   #sheet{position:fixed;left:0;right:0;bottom:0;z-index:40;
     background:var(--panel);backdrop-filter:blur(14px);
     border-top:1px solid var(--line);border-radius:18px 18px 0 0;
-    padding:18px 20px calc(env(safe-area-inset-bottom) + 18px);
-    max-height:min(78vh,78dvh);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
+    display:flex;flex-direction:column;
+    max-height:min(80vh,80dvh);
     transform:translateY(105%);transition:transform .28s cubic-bezier(.3,.9,.3,1)}
   #sheet.open{transform:translateY(0)}
   @media (prefers-reduced-motion:reduce){#sheet{transition:none}}
-  .sheetHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .sheetHead{display:flex;align-items:center;justify-content:space-between;
+    flex:none;padding:14px 20px 10px}
   .sheetTitle{font-weight:700;letter-spacing:.05em}
   #btnCloseSheet{color:var(--sub);font-size:14px;padding:6px 10px}
-  .field{margin-bottom:16px}
+  #sheetBody{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    overscroll-behavior:contain;padding:0 20px calc(env(safe-area-inset-bottom) + 16px)}
+  .field{margin-bottom:12px}
   .fieldLabel{display:flex;justify-content:space-between;align-items:baseline;
-    font-size:13px;color:var(--sub);margin-bottom:6px}
+    font-size:13px;color:var(--sub);margin-bottom:4px}
   .fieldLabel output{font-family:var(--mono);color:var(--ink);font-size:14px}
-  input[type=range]{width:100%;accent-color:var(--accent);height:32px;touch-action:pan-y}
+  input[type=range]{width:100%;accent-color:var(--accent);height:30px;touch-action:pan-y}
   input[type=text]{width:100%;background:rgba(255,255,255,.06);border:1px solid var(--line);
-    border-radius:10px;padding:10px 12px;color:var(--ink);font-size:15px}
+    border-radius:10px;padding:9px 12px;color:var(--ink);font-size:15px}
   .chips{display:flex;flex-wrap:wrap;gap:8px}
   .chip{border:1px solid var(--line);border-radius:999px;padding:7px 14px;
     font-size:13px;color:var(--ink);background:rgba(255,255,255,.04)}
   .chip.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
-  .hint{font-size:12px;color:var(--sub);margin-top:6px}
-  .sheetActions{display:flex;gap:10px;margin-top:6px}
+  .hint{font-size:12px;color:var(--sub);margin-top:5px}
+  .fold{width:100%;display:flex;justify-content:space-between;align-items:center;
+    border:1px solid var(--line);border-radius:10px;padding:10px 12px;
+    font-size:13.5px;color:var(--ink);background:rgba(255,255,255,.03)}
+  .fold .arrow{color:var(--sub);transition:transform .2s}
+  .fold.open .arrow{transform:rotate(180deg)}
+  .foldBody{display:none;padding-top:10px}
+  .fold.open + .foldBody{display:block}
+  .sheetActions{display:flex;gap:10px;margin-top:4px}
   .btnGhost{flex:1;border:1px solid var(--line);border-radius:12px;padding:12px;
     text-align:center;font-size:14px}
   .btnGhost.ok{border-color:var(--accent);color:var(--accent)}
@@ -303,10 +313,15 @@
     <span class="sheetTitle">設置カメラの設定</span>
     <button id="btnCloseSheet">閉じる ✕</button>
   </div>
+  <div id="sheetBody">
 
   <div class="field" id="camListField" style="display:none">
-    <div class="fieldLabel"><span>登録済みカメラから選ぶ</span></div>
-    <div class="chips" id="camChips"></div>
+    <button class="fold" id="camFold" type="button">
+      <span>登録済みカメラから選ぶ</span><span class="arrow">▼</span>
+    </button>
+    <div class="foldBody">
+      <div class="chips" id="camChips"></div>
+    </div>
   </div>
 
   <div class="field">
@@ -317,32 +332,42 @@
   <div class="field">
     <div class="fieldLabel"><span>水平画角</span><output id="outFov"></output></div>
     <input type="range" id="inFov" min="20" max="140" step="1">
-    <div class="chips" id="fovPresets" style="margin-top:8px">
-      <button class="chip" data-fov="103">2.8mm ≈103°</button>
-      <button class="chip" data-fov="81">3.6mm ≈81°</button>
-      <button class="chip" data-fov="70">4mm ≈70°</button>
-      <button class="chip" data-fov="50">6mm ≈50°</button>
-      <button class="chip" data-fov="39">8mm ≈39°</button>
-      <button class="chip" data-fov="27">12mm ≈27°</button>
-    </div>
-    <p class="hint">焦点距離の目安は 1/2.8型センサーの場合です。カメラの仕様書ではなく、実機写真から実測した画角の使用を推奨します。</p>
   </div>
 
   <div class="field">
     <div class="fieldLabel"><span>垂直画角</span><output id="outVfov"></output></div>
     <input type="range" id="inVfov" min="10" max="120" step="1">
-    <p class="hint">対角画角(水平・垂直から自動計算): <output id="outDiag" style="font-family:var(--mono);color:var(--ink)"></output></p>
+    <p class="hint">対角画角(自動計算): <output id="outDiag" style="font-family:var(--mono);color:var(--ink)"></output></p>
+  </div>
+
+  <div class="field">
+    <button class="fold" id="lensFold" type="button">
+      <span>焦点距離から目安を選ぶ(1/2.8型)</span><span class="arrow">▼</span>
+    </button>
+    <div class="foldBody">
+      <div class="chips" id="fovPresets">
+        <button class="chip" data-fov="103">2.8mm ≈103°</button>
+        <button class="chip" data-fov="81">3.6mm ≈81°</button>
+        <button class="chip" data-fov="70">4mm ≈70°</button>
+        <button class="chip" data-fov="50">6mm ≈50°</button>
+        <button class="chip" data-fov="39">8mm ≈39°</button>
+        <button class="chip" data-fov="27">12mm ≈27°</button>
+      </div>
+      <p class="hint">仕様書ではなく、実機写真から実測した画角の使用を推奨します。</p>
+    </div>
   </div>
 
   <div class="field">
     <div class="fieldLabel"><span>スマホ側カメラの水平画角(校正)</span><output id="outPfov"></output></div>
     <input type="range" id="inPfov" min="45" max="125" step="1">
-    <p class="hint">ライブ表示の枠の精度に関わる設定です(写真判定・角度計測には影響しません)。目安:標準カメラ 約65〜72°/超広角 約100〜110°。</p>
+    <p class="hint">ライブ表示の枠の精度に関わる設定です(写真判定・角度計測には影響しません)。</p>
   </div>
 
   <div class="sheetActions">
     <button class="btnGhost" id="btnCopyUrl">この設定のURLをコピー</button>
     <button class="btnGhost ok" id="btnDone">完了</button>
+  </div>
+
   </div>
 </section>
 
@@ -883,6 +908,10 @@
     toast(state.crop?"カメラ視点表示":"全体表示");
     layout();
   });
+
+  $("camFold").addEventListener("click", e=>e.currentTarget.classList.toggle("open"));
+  $("lensFold").addEventListener("click", e=>e.currentTarget.classList.toggle("open"));
+
   function renderCamList(){
     const arr=window.CAMERA_LIST;
     const field=$("camListField"), box=$("camChips");
