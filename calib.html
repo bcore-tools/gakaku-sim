@@ -162,7 +162,7 @@
     loadCV._p=(async ()=>{
       let lastErr=null;
       for(const u of CV_URLS){
-        progress.textContent="OpenCVを読み込んでいます(初回のみ・約10MB / "+new URL(u).host+")...";
+        progress.textContent="OpenCVを読み込んでいます(初回のみ・約10MB / "+new URL(u,location.href).host+")...";
         try{
           await new Promise((res,rej)=>{
             const s=document.createElement("script");
