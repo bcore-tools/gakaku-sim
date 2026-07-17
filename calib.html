@@ -133,16 +133,16 @@
     "https://docs.opencv.org/4.x/opencv.js",
     "https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4/dist/opencv.js",
     "https://unpkg.com/@techstark/opencv-js@4/dist/opencv.js"
-  ];
-  const FULLDIM=1920;  // 精密化(cornerSubPix)用の上限
+  ].map(u=>new URL(u,location.href).href);
+  const FULLDIM=1920, DETECT_DIM=900, SCAN_DIM=560;
 
   let views=[];
   let imgSize=null;
+  let locked=null;
   let lastResult=null;
 
   function toast(m){ const t=$("toast"); t.textContent=m; t.classList.add("show");
     clearTimeout(toast._x); toast._x=setTimeout(()=>t.classList.remove("show"),2600); }
-  const deg=r=>r*180/Math.PI;
 
   /* ---------- 印刷用ボード ---------- */
   (function(){
@@ -155,96 +155,207 @@
   })();
   $("btnPrint").addEventListener("click",()=>window.print());
 
-  /* ---------- OpenCV.js 遅延読み込み(複数CDNフォールバック) ---------- */
-  function loadCV(){
-    if(window.__cvReady) return Promise.resolve();
-    if(loadCV._p) return loadCV._p;
-    loadCV._p=(async ()=>{
-      let lastErr=null;
-      for(const u of CV_URLS){
-        progress.textContent="OpenCVを読み込んでいます(初回のみ・約10MB / "+new URL(u,location.href).host+")...";
-        try{
-          await new Promise((res,rej)=>{
-            const s=document.createElement("script");
-            s.src=u;
-            const to=setTimeout(()=>{ s.remove(); rej(new Error("タイムアウト")); },60000);
-            s.onload=()=>{ clearTimeout(to); res(); };
-            s.onerror=()=>{ clearTimeout(to); s.remove(); rej(new Error("読み込みエラー")); };
-            document.head.appendChild(s);
-          });
-          if(typeof cv!=="undefined" && typeof cv.then==="function"){ window.cv=await cv; }
-          else if(typeof cv!=="undefined" && !cv.Mat){
-            await new Promise(r=>{ cv.onRuntimeInitialized=r; });
-          }
-          if(typeof cv==="undefined" || !cv.Mat) throw new Error("初期化失敗");
-          window.__cvReady=true;
-          return;
-        }catch(e){ lastErr=e; }
+  /* ---------- Web Worker(OpenCVと計算はすべて裏スレッドで実行) ---------- */
+  const workerCode = `
+"use strict";
+const deg=r=>r*180/Math.PI;
+const SIZE_CANDIDATES=[[9,6],[6,9],[10,7],[7,10],[8,6],[6,8],[7,6],[6,7],[9,7],[7,9],
+  [8,5],[5,8],[7,5],[5,7],[6,5],[5,6],[11,8],[8,11],[6,4],[4,6],[5,4],[4,5]];
+let cvReady=false;
+
+function initCV(urls){
+  let lastErr=null;
+  for(const u of urls){
+    try{
+      postMessage({type:"progress",msg:"OpenCVを読み込んでいます(初回のみ・約10MB / "+u.split("/")[2]+")..."});
+      importScripts(u);
+      if(typeof cv!=="undefined" && typeof cv.then==="function"){
+        return Promise.resolve(cv).then(m=>{ self.cv=m; });
       }
-      loadCV._p=null;
-      throw new Error("OpenCVを読み込めませんでした(3系統すべて失敗)。社内プロキシ等で外部スクリプトがブロックされていないか確認してください。");
-    })();
-    return loadCV._p;
+      if(typeof cv!=="undefined" && cv.Mat){ return Promise.resolve(); }
+      if(typeof cv!=="undefined"){
+        return new Promise(r=>{ cv.onRuntimeInitialized=()=>r(); });
+      }
+      lastErr=new Error("cvが定義されません");
+    }catch(e){ lastErr=e; }
+  }
+  return Promise.reject(lastErr||new Error("すべての読み込み元で失敗しました"));
+}
+
+function grayOf(imgData){
+  const m=cv.matFromImageData(imgData);
+  const g=new cv.Mat();
+  cv.cvtColor(m,g,cv.COLOR_RGBA2GRAY);
+  m.delete();
+  return g;
+}
+function detectCoarse(gray,cols,rows,fast){
+  const corners=new cv.Mat();
+  const flags=cv.CALIB_CB_ADAPTIVE_THRESH|cv.CALIB_CB_NORMALIZE_IMAGE|
+              (fast?cv.CALIB_CB_FAST_CHECK:0);
+  const found=cv.findChessboardCorners(gray,new cv.Size(cols,rows),corners,flags);
+  if(!found){ corners.delete(); return null; }
+  const arr=new Float32Array(corners.data32F);
+  corners.delete();
+  return arr;
+}
+function refineFull(grayFull,coarse,scaleUp,cols,rows){
+  const N=cols*rows;
+  const m=new cv.Mat(N,1,cv.CV_32FC2);
+  for(let i=0;i<N*2;i++) m.data32F[i]=coarse[i]*scaleUp;
+  cv.cornerSubPix(grayFull,m,new cv.Size(11,11),new cv.Size(-1,-1),
+    new cv.TermCriteria(cv.TermCriteria_EPS+cv.TermCriteria_MAX_ITER,30,0.001));
+  const arr=new Float32Array(m.data32F);
+  m.delete();
+  return arr;
+}
+
+onmessage=async function(e){
+  const d=e.data;
+  try{
+    if(d.type==="init"){
+      if(!cvReady){ await initCV(d.urls); cvReady=true; }
+      postMessage({type:"ready"});
+      return;
+    }
+    if(d.type==="job"){
+      let locked=d.locked;
+      let grayDet=null, grayFull=null, coarse=null;
+      try{
+        grayDet=grayOf(d.det);
+        if(locked){
+          coarse=detectCoarse(grayDet,locked.cols,locked.rows,false);
+        }else{
+          const grayScan=grayOf(d.scan);
+          for(let k=0;k<SIZE_CANDIDATES.length;k++){
+            const c=SIZE_CANDIDATES[k];
+            postMessage({type:"progress",
+              msg:"パターン判定中 "+(k+1)+"/"+SIZE_CANDIDATES.length+"("+c[0]+"×"+c[1]+")..."});
+            const hit=detectCoarse(grayScan,c[0],c[1],true);
+            if(hit){ locked={cols:c[0],rows:c[1]}; break; }
+          }
+          grayScan.delete();
+          if(locked) coarse=detectCoarse(grayDet,locked.cols,locked.rows,false);
+        }
+        if(coarse && locked){
+          grayFull=grayOf(d.full);
+          const arr=refineFull(grayFull,coarse,d.full.width/d.det.width,locked.cols,locked.rows);
+          postMessage({type:"jobdone", idx:d.idx, ok:true, locked,
+            W:d.full.width, H:d.full.height, corners:arr.buffer},[arr.buffer]);
+        }else{
+          postMessage({type:"jobdone", idx:d.idx, ok:false, locked});
+        }
+      }finally{
+        if(grayDet){ try{grayDet.delete();}catch(e){} }
+        if(grayFull){ try{grayFull.delete();}catch(e){} }
+      }
+      return;
+    }
+    if(d.type==="calib"){
+      const cols=d.cols, rows=d.rows, N=cols*rows;
+      const objVec=new cv.MatVector(), imgVec=new cv.MatVector();
+      const keep=[];
+      try{
+        const objp=new cv.Mat(N,1,cv.CV_32FC3);
+        keep.push(objp);
+        for(let i=0;i<rows;i++)for(let j=0;j<cols;j++){
+          const idx=(i*cols+j)*3;
+          objp.data32F[idx]=j; objp.data32F[idx+1]=i; objp.data32F[idx+2]=0;
+        }
+        for(const buf of d.views){
+          const m=new cv.Mat(N,1,cv.CV_32FC2);
+          m.data32F.set(new Float32Array(buf));
+          keep.push(m);
+          objVec.push_back(objp);
+          imgVec.push_back(m);
+        }
+        const K=cv.Mat.eye(3,3,cv.CV_64F);
+        const D=new cv.Mat();
+        const rvecs=new cv.MatVector(), tvecs=new cv.MatVector();
+        const stdI=new cv.Mat(), stdE=new cv.Mat(), perView=new cv.Mat();
+        keep.push(K,D,stdI,stdE,perView);
+        const size=new cv.Size(d.W,d.H);
+        let rms;
+        try{
+          rms=cv.calibrateCameraExtended(objVec,imgVec,size,K,D,rvecs,tvecs,stdI,stdE,perView);
+        }catch(e){
+          rms=cv.calibrateCameraExtended(objVec,imgVec,size,K,D,rvecs,tvecs,stdI,stdE,perView,0);
+        }
+        const fx=K.data64F[0], fy=K.data64F[4];
+        postMessage({type:"calibdone",
+          hfov:deg(2*Math.atan(d.W/(2*fx))),
+          vfov:deg(2*Math.atan(d.H/(2*fy))),
+          dfov:deg(2*Math.atan(Math.hypot(d.W/(2*fx),d.H/(2*fy)))),
+          rms:rms});
+        rvecs.delete(); tvecs.delete();
+      }finally{
+        keep.forEach(m=>{ try{m.delete();}catch(e){} });
+        try{objVec.delete();}catch(e){}
+        try{imgVec.delete();}catch(e){}
+      }
+      return;
+    }
+  }catch(err){
+    postMessage({type:"error", msg:String(err&&err.message||err), ctx:d.type, idx:d.idx});
+  }
+};
+`;
+  let worker=null;
+  const pending={};
+  function getWorker(){
+    if(worker) return worker;
+    const blob=new Blob([workerCode],{type:"text/javascript"});
+    worker=new Worker(URL.createObjectURL(blob));
+    worker.onmessage=(e)=>{
+      const d=e.data;
+      if(d.type==="progress"){ progress.textContent=d.msg; return; }
+      if(pending[d.type]){ const f=pending[d.type]; delete pending[d.type]; f(d); }
+    };
+    worker.onerror=(e)=>{
+      progress.textContent="Workerエラー: "+(e.message||"不明");
+    };
+    return worker;
+  }
+  function ask(msg,replyType,transfer){
+    return new Promise((res)=>{
+      pending[replyType]=res;
+      getWorker().postMessage(msg,transfer||[]);
+    });
+  }
+  async function ensureCV(){
+    if(ensureCV._ok) return;
+    const r=await Promise.race([
+      ask({type:"init",urls:CV_URLS},"ready"),
+      ask({type:"__err_hold"},"error")
+    ]);
+    if(r && r.type==="error") throw new Error(r.msg);
+    ensureCV._ok=true;
   }
 
-  /* ---------- 画像読み込み(検出用に縮小/精密化用にフル解像度) ---------- */
-  const DETECT_DIM=900;   // 検出用
-  const SCAN_DIM=560;     // パターン総当たり用(さらに縮小)
+  /* ---------- 画像の縮小(メイン側・軽い処理のみ) ---------- */
   function loadImage(file){
     return new Promise((res,rej)=>{
       const url=URL.createObjectURL(file);
       const img=new Image();
-      img.onload=()=>{ res(img); };
+      img.onload=()=>res(img);
       img.onerror=()=>{ URL.revokeObjectURL(url); rej(new Error("画像を開けません")); };
       img.src=url;
     });
   }
-  function toCanvas(img,maxDim){
+  function toImageData(img,maxDim){
     const sc=Math.min(1, maxDim/Math.max(img.naturalWidth,img.naturalHeight));
     const W=Math.round(img.naturalWidth*sc), H=Math.round(img.naturalHeight*sc);
     const c=document.createElement("canvas"); c.width=W; c.height=H;
-    c.getContext("2d").drawImage(img,0,0,W,H);
-    return {canvas:c, scale:sc};
-  }
-  const tick=()=>new Promise(r=>setTimeout(r,0));
-
-  /* ---------- 交点検出(縮小検出→フル解像度精密化の2段階) ---------- */
-  const SIZE_CANDIDATES=[[9,6],[6,9],[10,7],[7,10],[8,6],[6,8],[7,6],[6,7],[9,7],[7,9],
-    [8,5],[5,8],[7,5],[5,7],[6,5],[5,6],[11,8],[8,11],[6,4],[4,6],[5,4],[4,5]];
-  let locked=null;
-
-  function detectCoarse(gray,cols,rows,fast){
-    const corners=new cv.Mat();
-    const flags=cv.CALIB_CB_ADAPTIVE_THRESH|cv.CALIB_CB_NORMALIZE_IMAGE|
-                (fast?cv.CALIB_CB_FAST_CHECK:0);
-    const found=cv.findChessboardCorners(gray,new cv.Size(cols,rows),corners,flags);
-    if(!found){ corners.delete(); return null; }
-    const arr=new Float32Array(corners.data32F);
-    corners.delete();
-    return arr;
+    const cx=c.getContext("2d");
+    cx.drawImage(img,0,0,W,H);
+    return cx.getImageData(0,0,W,H);
   }
 
-  function refineFull(grayFull,coarse,scaleUp,cols,rows){
-    const N=cols*rows;
-    const m=new cv.Mat(N,1,cv.CV_32FC2);
-    for(let i=0;i<N*2;i++) m.data32F[i]=coarse[i]*scaleUp;
-    cv.cornerSubPix(grayFull,m,new cv.Size(11,11),new cv.Size(-1,-1),
-      new cv.TermCriteria(cv.TermCriteria_EPS+cv.TermCriteria_MAX_ITER,30,0.001));
-    const arr=new Float32Array(m.data32F);
-    m.delete();
-    return arr;
-  }
-
-  function grayFromCanvas(canvas){
-    const src=cv.imread(canvas);
-    const gray=new cv.Mat();
-    cv.cvtColor(src,gray,cv.COLOR_RGBA2GRAY);
-    src.delete();
-    return gray;
-  }
-
+  /* ---------- 検出フロー ---------- */
   async function detectAll(fileArr){
-    await loadCV();
+    progress.textContent="準備中...";
+    try{ await ensureCV(); }
+    catch(e){ progress.textContent="エラー: "+e.message; return; }
     views=[]; imgSize=null; locked=null;
     $("patInfo").textContent="";
     fileList.innerHTML=""; result.style.display="none"; lastResult=null;
@@ -255,42 +366,33 @@
       row.innerHTML=f.name+' <span class="wait">検出中...</span>';
       fileList.appendChild(row);
       progress.textContent="交点を検出中 "+(i+1)+"/"+fileArr.length+
-        (locked?"(パターン "+locked.cols+"×"+locked.rows+")":"(パターン判定中)");
-      await tick();
-      let grayDet=null, grayFull=null;
+        (locked?"(パターン "+locked.cols+"×"+locked.rows+")":"");
       try{
         const img=await loadImage(f);
-        const full=toCanvas(img,FULLDIM);
-        if(imgSize && (full.canvas.width!==imgSize.W||full.canvas.height!==imgSize.H)){
+        const full=toImageData(img,FULLDIM);
+        if(imgSize && (full.width!==imgSize.W||full.height!==imgSize.H)){
           row.innerHTML=f.name+' <span class="ng">✗ 解像度が他と異なるため除外</span>';
           continue;
         }
-        const det=toCanvas(img,DETECT_DIM);
-        grayDet=grayFromCanvas(det.canvas);
-        let coarse=null, detScale=det.canvas.width;
-        if(locked){
-          coarse=detectCoarse(grayDet,locked.cols,locked.rows,false);
-        }else{
-          const scan=toCanvas(img,SCAN_DIM);
-          const grayScan=grayFromCanvas(scan.canvas);
-          for(const cand of SIZE_CANDIDATES){
-            const hit=detectCoarse(grayScan,cand[0],cand[1],true);
-            if(hit){
-              locked={cols:cand[0],rows:cand[1]};
-              $("patInfo").textContent="検出パターン: "+cand[0]+"×"+cand[1];
-              break;
-            }
-          }
-          grayScan.delete();
-          await tick();
-          if(locked) coarse=detectCoarse(grayDet,locked.cols,locked.rows,false);
+        const det=toImageData(img,DETECT_DIM);
+        const scan=locked? null : toImageData(img,SCAN_DIM);
+        const r=await Promise.race([
+          ask({type:"job", idx:i, full, det, scan, locked},"jobdone",
+              [full.data.buffer, det.data.buffer].concat(scan?[scan.data.buffer]:[])),
+          ask({type:"__err_hold"},"error")
+        ]);
+        delete pending["error"]; delete pending["jobdone"];
+        if(r.type==="error"){
+          row.innerHTML=f.name+' <span class="ng">✗ エラー: '+r.msg+'</span>';
+          continue;
         }
-        if(coarse && locked){
-          grayFull=grayFromCanvas(full.canvas);
-          const scaleUp=full.canvas.width/detScale;
-          const arr=refineFull(grayFull,coarse,scaleUp,locked.cols,locked.rows);
-          views.push({name:f.name, corners:arr});
-          if(!imgSize) imgSize={W:full.canvas.width,H:full.canvas.height};
+        if(r.locked && !locked){
+          locked=r.locked;
+          $("patInfo").textContent="検出パターン: "+locked.cols+"×"+locked.rows;
+        }
+        if(r.ok){
+          views.push(new Float32Array(r.corners));
+          if(!imgSize) imgSize={W:r.W,H:r.H};
           okCount++;
           row.innerHTML=f.name+' <span class="ok">✓ 検出成功</span>';
         }else{
@@ -298,11 +400,7 @@
         }
       }catch(e){
         row.innerHTML=f.name+' <span class="ng">✗ エラー: '+(e.message||e)+'</span>';
-      }finally{
-        if(grayDet){ try{grayDet.delete();}catch(e){} }
-        if(grayFull){ try{grayFull.delete();}catch(e){} }
       }
-      await tick();
     }
     progress.textContent="検出成功 "+okCount+"/"+fileArr.length+" 枚"+
       (locked?"(パターン "+locked.cols+"×"+locked.rows+")":"")+
@@ -312,62 +410,27 @@
 
   /* ---------- 校正計算 ---------- */
   async function calibrate(){
-    if(!locked){ toast("先に画像を読み込んでください"); return; }
-    const cols=locked.cols, rows=locked.rows;
-    progress.textContent="校正を計算中...(枚数により数十秒かかります)";
+    if(!locked || views.length<5){ toast("先に画像を読み込んでください"); return; }
+    progress.textContent="校正を計算中...(数十秒かかることがあります)";
     btnCalc.disabled=true;
-    await tick();
-    const N=cols*rows;
-    const objVec=new cv.MatVector(), imgVec=new cv.MatVector();
-    const keep=[];
-    try{
-      const objp=new cv.Mat(N,1,cv.CV_32FC3);
-      keep.push(objp);
-      for(let i=0;i<rows;i++)for(let j=0;j<cols;j++){
-        const idx=(i*cols+j)*3;
-        objp.data32F[idx]=j; objp.data32F[idx+1]=i; objp.data32F[idx+2]=0;
-      }
-      for(const v of views){
-        const m=new cv.Mat(N,1,cv.CV_32FC2);
-        m.data32F.set(v.corners);
-        keep.push(m);
-        objVec.push_back(objp);
-        imgVec.push_back(m);
-      }
-      const K=cv.Mat.eye(3,3,cv.CV_64F);
-      const D=new cv.Mat();
-      const rvecs=new cv.MatVector(), tvecs=new cv.MatVector();
-      const stdI=new cv.Mat(), stdE=new cv.Mat(), perView=new cv.Mat();
-      keep.push(K,D,stdI,stdE,perView);
-      const size=new cv.Size(imgSize.W,imgSize.H);
-      let rms;
-      try{
-        rms=cv.calibrateCameraExtended(objVec,imgVec,size,K,D,rvecs,tvecs,stdI,stdE,perView);
-      }catch(e){
-        rms=cv.calibrateCameraExtended(objVec,imgVec,size,K,D,rvecs,tvecs,stdI,stdE,perView,0);
-      }
-      const fx=K.data64F[0], fy=K.data64F[4];
-      const hfov=deg(2*Math.atan(imgSize.W/(2*fx)));
-      const vfov=deg(2*Math.atan(imgSize.H/(2*fy)));
-      const dfov=deg(2*Math.atan(Math.hypot(imgSize.W/(2*fx),imgSize.H/(2*fy))));
-      lastResult={hfov,vfov,dfov,rms};
-      $("rH").textContent=hfov.toFixed(1)+"°";
-      $("rV").textContent=vfov.toFixed(1)+"°";
-      $("rD").textContent=dfov.toFixed(1)+"°";
-      $("rRms").textContent=rms.toFixed(3);
-      $("rQuality").textContent = rms<=0.3? "(優秀)": rms<=0.7? "(良好)":
-        "(高め:撮影のブレ・ボードの歪みを確認して撮り直しを推奨)";
-      result.style.display="block";
-      progress.textContent="計算完了("+views.length+"枚使用)";
-      rvecs.delete(); tvecs.delete();
-    }catch(e){
-      progress.textContent="計算に失敗しました: "+(e.message||e);
-    }finally{
-      keep.forEach(m=>{ try{m.delete();}catch(e){} });
-      try{objVec.delete();}catch(e){}
-      try{imgVec.delete();}catch(e){}
-      btnCalc.disabled = views.length<5;
-    }
+    const bufs=views.map(v=>v.slice().buffer);
+    const r=await Promise.race([
+      ask({type:"calib", views:bufs, cols:locked.cols, rows:locked.rows,
+           W:imgSize.W, H:imgSize.H},"calibdone", bufs),
+      ask({type:"__err_hold"},"error")
+    ]);
+    delete pending["error"]; delete pending["calibdone"];
+    btnCalc.disabled = views.length<5;
+    if(r.type==="error"){ progress.textContent="計算に失敗しました: "+r.msg; return; }
+    lastResult={hfov:r.hfov, vfov:r.vfov, dfov:r.dfov, rms:r.rms};
+    $("rH").textContent=r.hfov.toFixed(1)+"°";
+    $("rV").textContent=r.vfov.toFixed(1)+"°";
+    $("rD").textContent=r.dfov.toFixed(1)+"°";
+    $("rRms").textContent=r.rms.toFixed(3);
+    $("rQuality").textContent = r.rms<=0.3? "(優秀)": r.rms<=0.7? "(良好)":
+      "(高め:撮影のブレ・ボードの歪みを確認して撮り直しを推奨)";
+    result.style.display="block";
+    progress.textContent="計算完了("+views.length+"枚使用)";
   }
 
   /* ---------- 登録済みカメラ ---------- */
