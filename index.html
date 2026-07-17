@@ -2,404 +2,912 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="theme-color" content="#0B0D0F">
-<title>カメラ登録(チェッカーボード校正)</title>
+<title>画角シミュレータ</title>
 <style>
   :root{
-    --bg:#0B0D0F; --panel:rgba(16,19,22,.90); --ink:#EEF1F2; --sub:#9AA4AB;
-    --accent:#FFC72C; --accent-ink:#1A1503; --line:rgba(255,255,255,.14);
-    --alert:#FF6B57; --ok:#7ED97E;
-    --mono:ui-monospace,"SFMono-Regular","Roboto Mono",monospace;
+    --bg:#0B0D0F;
+    --panel:rgba(16,19,22,.90);
+    --panel-soft:rgba(16,19,22,.72);
+    --ink:#EEF1F2;
+    --sub:#9AA4AB;
+    --accent:#FFC72C;
+    --accent-ink:#1A1503;
+    --line:rgba(255,255,255,.14);
+    --alert:#FF6B57;
+    --mono:ui-monospace,"SFMono-Regular","Roboto Mono","Osaka-Mono","MS Gothic",monospace;
     --sans:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
   }
-  *{box-sizing:border-box;margin:0;padding:0}
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;overscroll-behavior:none}
   body{background:var(--bg);color:var(--ink);font-family:var(--sans);
-       font-size:15px;line-height:1.7;padding:24px 16px 60px}
-  main{max-width:720px;margin:0 auto}
-  h1{font-size:22px;letter-spacing:.05em;margin-bottom:4px}
-  .lead{color:var(--sub);font-size:13.5px;margin-bottom:22px}
-  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
-    padding:16px 18px;margin-bottom:16px}
-  h2{font-size:15px;color:var(--accent);letter-spacing:.06em;margin-bottom:8px}
-  p{font-size:13.5px;color:var(--sub);margin-bottom:8px}
-  b{color:var(--ink)}
-  button{font-family:inherit;font-size:14px;color:var(--ink);background:rgba(255,255,255,.05);
-    border:1px solid var(--line);border-radius:10px;padding:10px 16px;cursor:pointer}
-  button.main{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
-  button:disabled{opacity:.4;cursor:default}
-  input[type=number],input[type=text]{background:rgba(255,255,255,.06);border:1px solid var(--line);
-    border-radius:8px;color:var(--ink);padding:7px 10px;font-family:var(--mono);font-size:14px}
-  input[type=number]{width:70px}
-  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}
-  .row label{font-size:12.5px;color:var(--sub);white-space:nowrap}
-  #fileList{font-family:var(--mono);font-size:12.5px;margin-top:8px;max-height:200px;overflow-y:auto}
-  #fileList div{padding:2px 0;border-bottom:1px dashed rgba(255,255,255,.07)}
-  .ok{color:var(--ok)} .ng{color:var(--alert)} .wait{color:var(--sub)}
-  #progress{font-size:13px;color:var(--accent);min-height:1.5em;margin-top:6px}
-  #result{display:none;border:1px solid var(--accent);border-radius:10px;
-    padding:12px 14px;margin-top:10px;font-size:14px}
-  #result .big{font-family:var(--mono);font-size:20px;color:var(--accent);font-weight:700}
-  #presetList{margin-top:8px}
-  .preset{display:flex;gap:8px;align-items:center;flex-wrap:wrap;
-    border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin-bottom:8px;font-size:13.5px}
-  .preset .nm{font-weight:700;min-width:8em}
-  .preset .val{font-family:var(--mono);color:var(--accent)}
-  .preset .rms{font-family:var(--mono);color:var(--sub);font-size:12px}
-  .preset a{color:var(--accent)}
-  .sp{flex:1}
-  #toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%);
-    background:var(--panel);border:1px solid var(--line);border-radius:999px;
-    padding:8px 18px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:50}
-  #toast.show{opacity:1}
+       font-size:15px;line-height:1.6;overflow:hidden;
+       padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+  button{font-family:inherit;font-size:inherit;color:inherit;background:none;border:none;cursor:pointer}
+  button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
-  /* 印刷用チェッカーボード */
-  #board{display:none}
-  @media print{
-    body *{display:none !important}
-    body{background:#fff;padding:0}
-    #board{display:block !important;position:fixed;inset:0;background:#fff}
-    #board .grid{display:grid !important;grid-template-columns:repeat(10,25mm);
-      grid-auto-rows:25mm;margin:10mm}
-    #board .grid div{display:block !important}
-    #board .b{background:#000 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-    @page{size:A4 landscape;margin:0}
-  }
+  #startScreen{position:fixed;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:22px;padding:28px;text-align:center;z-index:50;
+    background:
+      radial-gradient(120% 90% at 50% -10%, rgba(255,199,44,.07), transparent 55%),
+      var(--bg)}
+  .fovGlyph{width:180px;height:110px;flex:none}
+  .startTitle{font-size:26px;font-weight:700;letter-spacing:.06em}
+  .startLead{color:var(--sub);max-width:30em}
+  .configChip{display:inline-flex;flex-wrap:wrap;justify-content:center;gap:6px 14px;
+    border:1px solid var(--line);border-radius:10px;padding:10px 16px;
+    font-family:var(--mono);font-size:13px;color:var(--ink)}
+  .configChip .k{color:var(--sub);font-family:var(--sans)}
+  .btnPrimary{background:var(--accent);color:var(--accent-ink);font-weight:700;
+    padding:15px 34px;border-radius:999px;font-size:16px;letter-spacing:.04em}
+  .btnPrimary:active{transform:scale(.97)}
+  .startNote{color:var(--sub);font-size:12.5px}
+  #startError{display:none;color:var(--alert);font-size:13.5px;max-width:26em}
+
+  #stage{position:fixed;inset:0;overflow:hidden;display:none;
+    background:repeating-linear-gradient(45deg,#0A0C0E 0 12px,#14171B 12px 24px)}
+  #vwrap{position:absolute;transform-origin:center center}
+  #video{width:100%;height:100%;display:block;object-fit:fill;background:#000}
+
+  #frame{position:absolute;pointer-events:none;
+    box-shadow:0 0 0 9999px rgba(0,0,0,.58)}
+  #frame .corner{position:absolute;width:26px;height:26px;border:3px solid var(--accent)}
+  #frame .c-tl{left:-3px;top:-3px;border-right:none;border-bottom:none}
+  #frame .c-tr{right:-3px;top:-3px;border-left:none;border-bottom:none}
+  #frame .c-bl{left:-3px;bottom:-3px;border-right:none;border-top:none}
+  #frame .c-br{right:-3px;bottom:-3px;border-left:none;border-top:none}
+  #frame .edge{position:absolute;inset:0;border:1px solid rgba(255,199,44,.55)}
+  #frameTab{position:absolute;left:0;top:0;transform:translateY(calc(-100% - 6px));
+    background:var(--accent);color:var(--accent-ink);font-weight:700;font-size:12px;
+    padding:3px 10px;border-radius:6px;white-space:nowrap;max-width:80vw;
+    overflow:hidden;text-overflow:ellipsis}
+  #grid{position:absolute;inset:0;pointer-events:none;display:none}
+  #grid .gv,#grid .gh{position:absolute;background:rgba(255,255,255,.28)}
+  #grid .gv{width:1px;top:0;bottom:0}
+  #grid .gh{height:1px;left:0;right:0}
+
+  #topBar{position:fixed;top:calc(env(safe-area-inset-top) + 10px);left:0;right:0;
+    display:flex;justify-content:center;gap:8px;z-index:20;pointer-events:none}
+  #readout{background:var(--panel-soft);backdrop-filter:blur(8px);
+    border:1px solid var(--line);border-radius:999px;padding:6px 16px;
+    font-family:var(--mono);font-size:13px;letter-spacing:.02em}
+  #readout b{color:var(--accent);font-weight:600}
+
+  #warnBand{position:fixed;top:calc(env(safe-area-inset-top) + 54px);left:50%;
+    transform:translateX(-50%);z-index:20;display:none;max-width:92vw;
+    background:rgba(48,38,6,.92);border:1px solid var(--accent);color:#FFE9AF;
+    border-radius:10px;padding:8px 14px;font-size:13px;text-align:center}
+
+  #dock{position:fixed;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + 12px);
+    display:flex;justify-content:center;align-items:center;gap:10px;z-index:20}
+  .dockBtn{background:var(--panel);border:1px solid var(--line);border-radius:16px;
+    min-width:60px;padding:10px 8px;display:flex;flex-direction:column;align-items:center;gap:3px;
+    font-size:11px;color:var(--ink)}
+  .dockBtn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;
+    stroke-linecap:round;stroke-linejoin:round}
+  .dockBtn.on{border-color:var(--accent);color:var(--accent)}
+  #btnShot{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);
+    min-width:72px;font-weight:700}
+  #btnShot svg{stroke:var(--accent-ink)}
+  .dockBtn:active{transform:scale(.95)}
+
+  #sheet{position:fixed;left:0;right:0;bottom:0;z-index:40;
+    background:var(--panel);backdrop-filter:blur(14px);
+    border-top:1px solid var(--line);border-radius:18px 18px 0 0;
+    padding:18px 20px calc(env(safe-area-inset-bottom) + 18px);
+    max-height:78vh;overflow-y:auto;
+    transform:translateY(105%);transition:transform .28s cubic-bezier(.3,.9,.3,1)}
+  #sheet.open{transform:translateY(0)}
+  @media (prefers-reduced-motion:reduce){#sheet{transition:none}}
+  .sheetHead{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .sheetTitle{font-weight:700;letter-spacing:.05em}
+  #btnCloseSheet{color:var(--sub);font-size:14px;padding:6px 10px}
+  .field{margin-bottom:16px}
+  .fieldLabel{display:flex;justify-content:space-between;align-items:baseline;
+    font-size:13px;color:var(--sub);margin-bottom:6px}
+  .fieldLabel output{font-family:var(--mono);color:var(--ink);font-size:14px}
+  input[type=range]{width:100%;accent-color:var(--accent);height:32px}
+  input[type=text]{width:100%;background:rgba(255,255,255,.06);border:1px solid var(--line);
+    border-radius:10px;padding:10px 12px;color:var(--ink);font-size:15px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{border:1px solid var(--line);border-radius:999px;padding:7px 14px;
+    font-size:13px;color:var(--ink);background:rgba(255,255,255,.04)}
+  .chip.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
+  .hint{font-size:12px;color:var(--sub);margin-top:6px}
+  .sheetActions{display:flex;gap:10px;margin-top:6px}
+  .btnGhost{flex:1;border:1px solid var(--line);border-radius:12px;padding:12px;
+    text-align:center;font-size:14px}
+  .btnGhost.ok{border-color:var(--accent);color:var(--accent)}
+
+  #crosshair{position:fixed;left:50%;top:50%;width:36px;height:36px;margin:-18px 0 0 -18px;
+    z-index:25;display:none;pointer-events:none}
+  #crosshair::before,#crosshair::after{content:"";position:absolute;background:var(--accent)}
+  #crosshair::before{left:50%;top:0;bottom:0;width:2px;margin-left:-1px}
+  #crosshair::after{top:50%;left:0;right:0;height:2px;margin-top:-1px}
+  #measurePanel{position:fixed;left:12px;right:12px;
+    bottom:calc(env(safe-area-inset-bottom) + 12px);z-index:30;display:none;
+    background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 16px}
+  #mTitle{font-weight:700;margin-bottom:2px}
+  #mSub{font-size:13px;color:var(--sub)}
+  #mLive{font-family:var(--mono);font-size:13px;color:var(--accent);margin-top:4px;min-height:1.4em}
+  #mResult{font-size:13.5px;margin-top:6px;display:none;
+    border-top:1px solid var(--line);padding-top:8px}
+  .mBtns{display:flex;gap:10px;margin-top:10px}
+  .mBtns .btnGhost{padding:11px}
+  #btnMPrimary{background:var(--accent);color:var(--accent-ink);border:none;font-weight:700;
+    flex:1;border-radius:12px;padding:12px;font-size:14px}
+
+  #photoMode{position:fixed;inset:0;z-index:55;display:none;flex-direction:column;background:var(--bg)}
+  #photoMode.open{display:flex}
+  .pHead{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;
+    padding-top:calc(env(safe-area-inset-top) + 12px);border-bottom:1px solid var(--line)}
+  .pHead b{letter-spacing:.05em}
+  #pClose{color:var(--sub);padding:6px 10px}
+  #pCanvasWrap{flex:1;position:relative;min-height:0;
+    background:repeating-linear-gradient(45deg,#0A0C0E 0 12px,#14171B 12px 24px)}
+  #pCanvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+  #pEmpty{position:absolute;inset:0;display:flex;flex-direction:column;gap:14px;
+    align-items:center;justify-content:center;color:var(--sub);text-align:center;padding:24px}
+  .pFoot{border-top:1px solid var(--line);
+    padding:12px 16px calc(env(safe-area-inset-bottom) + 12px);
+    display:flex;flex-direction:column;gap:8px}
+  #pResult{font-size:13.5px;min-height:1.4em}
+  .pRow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .pRow label{font-size:12.5px;color:var(--sub);white-space:nowrap}
+  .pNum{width:84px;background:rgba(255,255,255,.06);border:1px solid var(--line);
+    border-radius:8px;color:var(--ink);padding:6px 8px;font-family:var(--mono);font-size:14px}
+  .pNum:disabled{opacity:.4}
+  .pBtn{border:1px solid var(--line);border-radius:12px;padding:10px 16px;font-size:14px}
+  .pBtn.main{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
+
+  #toast{position:fixed;left:50%;bottom:120px;transform:translateX(-50%) translateY(10px);
+    background:var(--panel);border:1px solid var(--line);border-radius:999px;
+    padding:8px 18px;font-size:13px;z-index:60;opacity:0;pointer-events:none;
+    transition:opacity .2s,transform .2s}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 </style>
 </head>
 <body>
-<main>
-  <h1>カメラ登録(チェッカーボード校正)</h1>
-  <p class="lead">カメラ実機で撮影したチェッカーボード画像から、水平・垂直画角とレンズ歪みを高精度に実測し、シミュレータ用のカメラ設定として登録します。社内での機種登録作業用のページです。</p>
 
-  <section>
-    <h2>1. ボードを用意する</h2>
-    <p>下のボタンから印刷画面を開き、A4横で印刷して<b>硬い平らな板</b>(アルミ複合板・厚紙など)に気泡なく貼り付けてください。マスの実寸は画角の計算に影響しないため、印刷倍率は気にしなくて構いません。<b>平面性が最重要</b>です。</p>
-    <button id="btnPrint">印刷用ボードを表示(10×7マス)</button>
-  </section>
+<section id="startScreen">
+  <svg class="fovGlyph" viewBox="0 0 180 110" aria-hidden="true">
+    <g stroke="#FFC72C" stroke-width="2" fill="none">
+      <line x1="20" y1="96" x2="168" y2="14"/>
+      <line x1="20" y1="96" x2="168" y2="96"/>
+      <path d="M 74 96 A 54 54 0 0 0 64 66"/>
+    </g>
+    <g stroke="rgba(255,255,255,.35)" stroke-width="1.5" fill="none">
+      <rect x="6" y="88" width="16" height="16" rx="3"/>
+      <circle cx="14" cy="96" r="3.5"/>
+    </g>
+    <text x="86" y="84" fill="#FFC72C" font-size="13" font-family="monospace">θ</text>
+  </svg>
+  <div>
+    <h1 class="startTitle">画角シミュレータ</h1>
+    <p class="startLead">設置予定カメラの「映る範囲」を、お手元のスマートフォンでその場で確認できます。</p>
+  </div>
+  <div class="configChip" id="startConfig"></div>
+  <button class="btnPrimary" id="btnStart">カメラを起動する</button>
+  <button class="pBtn" id="btnPhotoStart" style="width:min(280px,86%)">写真で判定する(カメラ許可・センサー不要)</button>
+  <p class="startNote">カメラ起動時にはアクセス許可を求められます。</p>
+  <p id="startError"></p>
+</section>
 
-  <section>
-    <h2>2. カメラ実機で撮影する</h2>
-    <p>登録したいカメラを<b>実運用と同じ映像設定</b>(解像度・補正)にして、ボードを手に持ちながらスナップショットを<b>10〜15枚</b>撮影してください。コツ:</p>
-    <p>・ボードを画面の<b>中央だけでなく四隅・端</b>にも配置する<br>
-       ・正面だけでなく<b>±30°程度傾けた</b>カットを混ぜる<br>
-       ・ボード全体が写り、ブレ・ピンボケがないこと</p>
-  </section>
-
-  <section>
-    <h2>3. 画像を読み込んで計算する</h2>
-    <p>交点数は画像から<b>自動判定</b>されます(付属の印刷ボードは9×6)。
-      <span id="patInfo" style="font-family:var(--mono);color:var(--accent)"></span></p>
-    <div class="row">
-      <button class="main" id="btnPick">画像を選ぶ(複数選択)</button>
-      <button id="btnCalc" disabled>校正を計算する</button>
+<div id="stage">
+  <div id="vwrap">
+    <video id="video" autoplay playsinline muted></video>
+  </div>
+  <div id="frame">
+    <span class="edge"></span>
+    <span class="corner c-tl"></span><span class="corner c-tr"></span>
+    <span class="corner c-bl"></span><span class="corner c-br"></span>
+    <div id="grid">
+      <span class="gv" style="left:33.33%"></span><span class="gv" style="left:66.66%"></span>
+      <span class="gh" style="top:33.33%"></span><span class="gh" style="top:66.66%"></span>
     </div>
-    <div id="progress"></div>
-    <div id="fileList"></div>
-    <div id="result">
-      <div>水平画角 <span class="big" id="rH"></span> × 垂直画角 <span class="big" id="rV"></span></div>
-      <div style="font-size:13px;color:var(--sub);margin-top:4px">
-        対角 <span id="rD" style="font-family:var(--mono)"></span> /
-        再投影誤差 RMS <span id="rRms" style="font-family:var(--mono)"></span> px
-        <span id="rQuality"></span>
-      </div>
-      <div class="row" style="margin-top:10px">
-        <input type="text" id="camName" placeholder="機種名(例:○○ 望遠モデル 1080p)" style="flex:1;min-width:12em">
-        <button class="main" id="btnSave">この結果を登録</button>
-      </div>
+    <span id="frameTab"></span>
+  </div>
+</div>
+
+<div id="topBar"><div id="readout"></div></div>
+<div id="warnBand"></div>
+
+<div id="crosshair"></div>
+<section id="measurePanel" aria-label="角度計測">
+  <div id="mTitle"></div>
+  <div id="mSub"></div>
+  <div id="mLive"></div>
+  <div id="mResult"></div>
+  <div class="mBtns">
+    <button id="btnMPrimary"></button>
+    <button class="btnGhost" id="btnMCancel">終了</button>
+  </div>
+</section>
+
+<section id="photoMode" aria-label="写真判定">
+  <div class="pHead">
+    <b>写真で画角判定</b>
+    <span style="display:flex;gap:8px;align-items:center">
+      <button class="pBtn" id="pPick">別の写真</button>
+      <button id="pClose">閉じる ✕</button>
+    </span>
+  </div>
+  <div id="pCanvasWrap">
+    <canvas id="pCanvas"></canvas>
+    <div id="pEmpty">
+      <p><b>撮り方</b><br>幅のわかる基準物(例:A4用紙=幅297mm)を、メジャーで測った距離(例:1m)の位置にカメラへ正対させて置き、設置予定位置からズームなし(1×)で撮影してください。</p>
+      <p>どの機種・どのカメラで撮った写真でも判定できます。</p>
+      <button class="pBtn main" id="pPick2">写真を選ぶ / 撮影する</button>
     </div>
-    <input type="file" id="files" accept="image/*" multiple hidden>
-  </section>
+  </div>
+  <div class="pFoot">
+    <div id="pResult"></div>
+    <div class="pRow" id="pCalRow">
+      <label>基準物の幅</label><input type="number" class="pNum" id="pRefW" value="297" min="10" max="20000" step="1"><label>mm</label>
+      <label>距離</label><input type="number" class="pNum" id="pRefD" value="1000" min="100" max="99999" step="10"><label>mm</label>
+      <button class="pBtn main" id="pCalOk">校正を確定</button>
+    </div>
+    <div class="pRow" id="pRangeRow" style="display:none">
+      <label>設置カメラ 水平</label>
+      <input type="number" class="pNum" id="pTfov" min="20" max="140" step="1"><label>°</label>
+      <label>垂直</label>
+      <input type="number" class="pNum" id="pVfov" min="10" max="120" step="1"><label>°</label>
+      <label style="color:var(--sub)">対角 <span id="pDiag" style="font-family:var(--mono);color:var(--ink)"></span></label>
+      <span style="flex:1"></span>
+      <button class="pBtn" id="pReCal">校正をやり直す</button>
+    </div>
+    <div class="pRow" id="pHeightRow" style="display:none">
+      <label><input type="checkbox" id="pHOn" style="accent-color:var(--accent)"> 高さ補正</label>
+      <label>設置高さ</label><input type="number" class="pNum" id="pHCam" value="5.0" min="0" max="99" step="0.1" disabled><label>m</label>
+      <label>撮影高さ</label><input type="number" class="pNum" id="pHShot" value="1.5" min="0" max="99" step="0.1" disabled><label>m</label>
+      <label>対象距離</label><input type="number" class="pNum" id="pHDist" value="20" min="1" max="999" step="1" disabled><label>m</label>
+    </div>
+  </div>
+  <input type="file" id="pFile" accept="image/*" hidden>
+</section>
 
-  <section>
-    <h2>登録済みカメラ</h2>
-    <p>この端末のブラウザに保存されます。「シミュレータで開く」で設定済みの画角シミュレータが開きます。</p>
-    <div id="presetList"></div>
-  </section>
-</main>
+<div id="dock" style="display:none">
+  <button class="dockBtn" id="btnLens" title="カメラ切替">
+    <svg viewBox="0 0 24 24"><path d="M4 9h3l2-2h6l2 2h3v10H4z"/><circle cx="12" cy="13.5" r="3.2"/><path d="M17 4l2 2-2 2"/></svg>
+    <span>レンズ</span>
+  </button>
+  <button class="dockBtn" id="btnCrop" title="カメラ視点表示">
+    <svg viewBox="0 0 24 24"><path d="M7 3v14h14"/><path d="M3 7h14v14"/></svg>
+    <span>カメラ視点</span>
+  </button>
+  <button class="dockBtn" id="btnShot" title="撮影">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/></svg>
+    <span>撮影</span>
+  </button>
+  <button class="dockBtn" id="btnPhoto" title="写真で判定">
+    <svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 15l4-4 4 4 3-3 5 5"/><circle cx="9" cy="9" r="1.4"/></svg>
+    <span>写真</span>
+  </button>
+  <button class="dockBtn" id="btnMeasure" title="角度計測">
+    <svg viewBox="0 0 24 24"><path d="M4 19h16"/><path d="M4 19L18 6"/><path d="M10.5 19a6.5 6.5 0 0 0-2-4.7"/></svg>
+    <span>計測</span>
+  </button>
+  <button class="dockBtn" id="btnGrid" title="グリッド">
+    <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9.3 4v16M14.6 4v16M4 9.3h16M4 14.6h16"/></svg>
+    <span>グリッド</span>
+  </button>
+  <button class="dockBtn" id="btnSheet" title="設定">
+    <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 12h4M12 12h8M4 17h13M20 17h0"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18.5" cy="17" r="2"/></svg>
+    <span>設定</span>
+  </button>
+</div>
 
-<div id="board"><div class="grid" id="boardGrid"></div></div>
+<section id="sheet" aria-label="設定">
+  <div class="sheetHead">
+    <span class="sheetTitle">設置カメラの設定</span>
+    <button id="btnCloseSheet">閉じる ✕</button>
+  </div>
+
+  <div class="field">
+    <div class="fieldLabel"><span>カメラ名(任意)</span></div>
+    <input type="text" id="inName" placeholder="例:AXIS M2036-LE" maxlength="40">
+  </div>
+
+  <div class="field">
+    <div class="fieldLabel"><span>水平画角</span><output id="outFov"></output></div>
+    <input type="range" id="inFov" min="20" max="140" step="1">
+    <div class="chips" id="fovPresets" style="margin-top:8px">
+      <button class="chip" data-fov="103">2.8mm ≈103°</button>
+      <button class="chip" data-fov="81">3.6mm ≈81°</button>
+      <button class="chip" data-fov="70">4mm ≈70°</button>
+      <button class="chip" data-fov="50">6mm ≈50°</button>
+      <button class="chip" data-fov="39">8mm ≈39°</button>
+      <button class="chip" data-fov="27">12mm ≈27°</button>
+    </div>
+    <p class="hint">焦点距離の目安は 1/2.8型センサーの場合です。カメラの仕様書ではなく、実機写真から実測した画角の使用を推奨します。</p>
+  </div>
+
+  <div class="field">
+    <div class="fieldLabel"><span>垂直画角</span><output id="outVfov"></output></div>
+    <input type="range" id="inVfov" min="10" max="120" step="1">
+    <p class="hint">対角画角(水平・垂直から自動計算): <output id="outDiag" style="font-family:var(--mono);color:var(--ink)"></output></p>
+  </div>
+
+  <div class="field">
+    <div class="fieldLabel"><span>スマホ側カメラの水平画角(校正)</span><output id="outPfov"></output></div>
+    <input type="range" id="inPfov" min="45" max="125" step="1">
+    <p class="hint">ライブ表示の枠の精度に関わる設定です(写真判定・角度計測には影響しません)。目安:標準カメラ 約65〜72°/超広角 約100〜110°。</p>
+  </div>
+
+  <div class="sheetActions">
+    <button class="btnGhost" id="btnCopyUrl">この設定のURLをコピー</button>
+    <button class="btnGhost ok" id="btnDone">完了</button>
+  </div>
+</section>
+
 <div id="toast" role="status"></div>
 
 <script>
 (function(){
   "use strict";
-  const $=id=>document.getElementById(id);
-  const filesInput=$("files"), fileList=$("fileList"), progress=$("progress");
-  const btnPick=$("btnPick"), btnCalc=$("btnCalc"), result=$("result");
-  const LSKEY="gakakuCamPresets";
-  const CV_URLS=[
-    "https://docs.opencv.org/4.x/opencv.js",
-    "https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4/dist/opencv.js",
-    "https://unpkg.com/@techstark/opencv-js@4/dist/opencv.js"
-  ];
-  const MAXDIM=1600;
 
-  let views=[];
-  let imgSize=null;
-  let lastResult=null;
+  const AR_MAP = {"16:9":16/9, "4:3":4/3, "3:2":3/2, "1:1":1, "9:16":9/16};
+  const state = {
+    name: "",
+    tfov: 92,
+    tvfov: 60,
+    pfov: 68,
+    grid: false,
+    crop: false
+  };
 
-  function toast(m){ const t=$("toast"); t.textContent=m; t.classList.add("show");
-    clearTimeout(toast._x); toast._x=setTimeout(()=>t.classList.remove("show"),2600); }
-  const deg=r=>r*180/Math.PI;
+  const $ = id => document.getElementById(id);
+  const startScreen=$("startScreen"), startConfig=$("startConfig"), startError=$("startError");
+  const stage=$("stage"), vwrap=$("vwrap"), video=$("video");
+  const frame=$("frame"), frameTab=$("frameTab"), grid=$("grid");
+  const readout=$("readout"), warnBand=$("warnBand"), dock=$("dock");
+  const sheet=$("sheet");
+  const inName=$("inName"), inFov=$("inFov"), outFov=$("outFov");
+  const inPfov=$("inPfov"), outPfov=$("outPfov");
+  const inVfov=$("inVfov"), outVfov=$("outVfov"), outDiag=$("outDiag");
 
-  /* ---------- 印刷用ボード ---------- */
-  (function(){
-    const g=$("boardGrid");
-    for(let i=0;i<7;i++)for(let j=0;j<10;j++){
-      const d=document.createElement("div");
-      if((i+j)%2===0) d.className="b";
-      g.appendChild(d);
-    }
-  })();
-  $("btnPrint").addEventListener("click",()=>window.print());
+  let devices=[], deviceIndex=-1, currentStream=null;
 
-  /* ---------- OpenCV.js 遅延読み込み(複数CDNフォールバック) ---------- */
-  function loadCV(){
-    if(window.__cvReady) return Promise.resolve();
-    if(loadCV._p) return loadCV._p;
-    loadCV._p=(async ()=>{
-      let lastErr=null;
-      for(const u of CV_URLS){
-        progress.textContent="OpenCVを読み込んでいます(初回のみ・約10MB / "+new URL(u).host+")...";
-        try{
-          await new Promise((res,rej)=>{
-            const s=document.createElement("script");
-            s.src=u;
-            const to=setTimeout(()=>{ s.remove(); rej(new Error("タイムアウト")); },60000);
-            s.onload=()=>{ clearTimeout(to); res(); };
-            s.onerror=()=>{ clearTimeout(to); s.remove(); rej(new Error("読み込みエラー")); };
-            document.head.appendChild(s);
-          });
-          if(typeof cv!=="undefined" && typeof cv.then==="function"){ window.cv=await cv; }
-          else if(typeof cv!=="undefined" && !cv.Mat){
-            await new Promise(r=>{ cv.onRuntimeInitialized=r; });
-          }
-          if(typeof cv==="undefined" || !cv.Mat) throw new Error("初期化失敗");
-          window.__cvReady=true;
-          return;
-        }catch(e){ lastErr=e; }
-      }
-      loadCV._p=null;
-      throw new Error("OpenCVを読み込めませんでした(3系統すべて失敗)。社内プロキシ等で外部スクリプトがブロックされていないか確認してください。");
-    })();
-    return loadCV._p;
+  const rad = d => d*Math.PI/180;
+  const deg = r => r*180/Math.PI;
+
+  try{
+    const q = new URLSearchParams(location.search);
+    if(q.has("fov")){ const v=parseFloat(q.get("fov")); if(v>=20&&v<=140) state.tfov=v; }
+    if(q.has("pfov")){ const v=parseFloat(q.get("pfov")); if(v>=45&&v<=125) state.pfov=v; }
+    if(q.has("ar") && AR_MAP[q.get("ar")])
+      state.tvfov=deg(2*Math.atan(Math.tan(rad(state.tfov)/2)/AR_MAP[q.get("ar")]));
+    if(q.has("vfov")){ const v=parseFloat(q.get("vfov")); if(v>=10&&v<=120) state.tvfov=v; }
+    if(q.has("name")) state.name=q.get("name").slice(0,40);
+  }catch(e){}
+
+  function targetVFov(){ return state.tvfov; }
+  function diagFov(){
+    return deg(2*Math.atan(Math.hypot(Math.tan(rad(state.tfov)/2),Math.tan(rad(state.tvfov)/2))));
   }
 
-  /* ---------- 画像読み込み(縮小してキャンバスへ) ---------- */
-  function loadImageToCanvas(file){
-    return new Promise((res,rej)=>{
-      const url=URL.createObjectURL(file);
-      const img=new Image();
-      img.onload=()=>{
-        const sc=Math.min(1, MAXDIM/Math.max(img.naturalWidth,img.naturalHeight));
-        const W=Math.round(img.naturalWidth*sc), H=Math.round(img.naturalHeight*sc);
-        const c=document.createElement("canvas"); c.width=W; c.height=H;
-        c.getContext("2d").drawImage(img,0,0,W,H);
-        URL.revokeObjectURL(url);
-        res(c);
-      };
-      img.onerror=()=>rej(new Error("画像を開けません"));
-      img.src=url;
+  function fractions(){
+    const vw=video.videoWidth, vh=video.videoHeight;
+    if(!vw||!vh) return null;
+    const tanPLong = Math.tan(rad(state.pfov)/2);
+    const long=Math.max(vw,vh), short=Math.min(vw,vh);
+    const tanPShort = tanPLong*(short/long);
+    const tanPX = (vw>=vh)? tanPLong : tanPShort;
+    const tanPY = (vw>=vh)? tanPShort : tanPLong;
+    const tanTH = Math.tan(rad(state.tfov)/2);
+    const tanTV = Math.tan(rad(state.tvfov)/2);
+    const rx = tanTH/tanPX, ry = tanTV/tanPY;
+    return { rx, ry, over: (rx>1.001||ry>1.001) };
+  }
+
+  function layout(){
+    const f = fractions();
+    if(!f) return;
+    const vw=video.videoWidth, vh=video.videoHeight;
+    const sw=stage.clientWidth, sh=stage.clientHeight;
+    const needW = vw*Math.max(f.rx,1), needH = vh*Math.max(f.ry,1);
+    let s = Math.min(sw/needW, sh/needH);
+    if(state.crop){
+      s = Math.min(sw/(vw*f.rx), sh/(vh*f.ry));
+    }
+    const dispW=vw*s, dispH=vh*s;
+    vwrap.style.width=dispW+"px";  vwrap.style.height=dispH+"px";
+    vwrap.style.left=((sw-dispW)/2)+"px"; vwrap.style.top=((sh-dispH)/2)+"px";
+
+    const fw=vw*s*f.rx, fh=vh*s*f.ry;
+    frame.style.width=fw+"px";  frame.style.height=fh+"px";
+    frame.style.left=((sw-fw)/2)+"px"; frame.style.top=((sh-fh)/2)+"px";
+
+    const vf = targetVFov();
+    readout.innerHTML =
+      "<b>"+state.tfov.toFixed(0)+"°×"+vf.toFixed(0)+"°</b> 対角"+diagFov().toFixed(0)+
+      "° 倍率 "+(1/Math.max(f.rx,1e-6)).toFixed(2)+"×";
+    frameTab.textContent = (state.name? state.name+" " : "") +
+      "視野 "+state.tfov.toFixed(0)+"°×"+vf.toFixed(0)+"°";
+
+    if(f.over){
+      warnBand.style.display="block";
+      warnBand.textContent =
+        "設置カメラはスマホより広角です。枠内の縞模様部分は画面外ですが、実際のカメラには映ります。"+
+        "「レンズ」で超広角(0.5×)に切り替えると全体を映像で確認できます。";
+    }else{
+      warnBand.style.display="none";
+    }
+  }
+
+  window.addEventListener("resize", layout);
+  window.addEventListener("orientationchange", ()=>setTimeout(layout,300));
+  video.addEventListener("loadedmetadata", layout);
+
+  async function openCamera(constraintsVideo){
+    if(currentStream) currentStream.getTracks().forEach(t=>t.stop());
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: constraintsVideo, audio:false
     });
-  }
-  const tick=()=>new Promise(r=>setTimeout(r,0));
-
-  /* ---------- 交点検出(パターンサイズ自動判定) ---------- */
-  const SIZE_CANDIDATES=[[9,6],[6,9],[10,7],[7,10],[8,6],[6,8],[7,6],[6,7],[9,7],[7,9],
-    [8,5],[5,8],[7,5],[5,7],[6,5],[5,6],[11,8],[8,11],[6,4],[4,6],[5,4],[4,5]];
-  let locked=null;
-
-  function tryDetect(gray,cols,rows,fast){
-    const corners=new cv.Mat();
-    const flags=cv.CALIB_CB_ADAPTIVE_THRESH|cv.CALIB_CB_NORMALIZE_IMAGE|
-                (fast?cv.CALIB_CB_FAST_CHECK:0);
-    const found=cv.findChessboardCorners(gray,new cv.Size(cols,rows),corners,flags);
-    if(!found){ corners.delete(); return null; }
-    cv.cornerSubPix(gray,corners,new cv.Size(11,11),new cv.Size(-1,-1),
-      new cv.TermCriteria(cv.TermCriteria_EPS+cv.TermCriteria_MAX_ITER,30,0.001));
-    const arr=new Float32Array(corners.data32F);
-    corners.delete();
-    return arr;
+    currentStream = stream;
+    video.srcObject = stream;
+    await video.play().catch(()=>{});
+    layout();
   }
 
-  async function detectAll(fileArr){
-    await loadCV();
-    views=[]; imgSize=null; locked=null;
-    $("patInfo").textContent="";
-    fileList.innerHTML=""; result.style.display="none"; lastResult=null;
-    let okCount=0;
-    for(let i=0;i<fileArr.length;i++){
-      const f=fileArr[i];
-      const row=document.createElement("div");
-      row.innerHTML=f.name+' <span class="wait">検出中...</span>';
-      fileList.appendChild(row);
-      progress.textContent="交点を検出中 "+(i+1)+"/"+fileArr.length+
-        (locked?"(パターン "+locked.cols+"×"+locked.rows+")":"(パターン判定中)");
-      await tick();
-      try{
-        const canvas=await loadImageToCanvas(f);
-        if(imgSize && (canvas.width!==imgSize.W||canvas.height!==imgSize.H)){
-          row.innerHTML=f.name+' <span class="ng">✗ 解像度が他と異なるため除外</span>';
-          continue;
-        }
-        const src=cv.imread(canvas);
-        const gray=new cv.Mat();
-        cv.cvtColor(src,gray,cv.COLOR_RGBA2GRAY);
-        let arr=null;
-        if(locked){
-          arr=tryDetect(gray,locked.cols,locked.rows,false);
-        }else{
-          for(const cand of SIZE_CANDIDATES){
-            arr=tryDetect(gray,cand[0],cand[1],true);
-            if(arr){
-              locked={cols:cand[0],rows:cand[1]};
-              $("patInfo").textContent="検出パターン: "+cand[0]+"×"+cand[1];
-              break;
-            }
-            await tick();
-          }
-        }
-        if(arr){
-          views.push({name:f.name, corners:arr});
-          if(!imgSize) imgSize={W:canvas.width,H:canvas.height};
-          okCount++;
-          row.innerHTML=f.name+' <span class="ok">✓ 検出成功</span>';
-        }else{
-          row.innerHTML=f.name+' <span class="ng">✗ ボードを検出できません</span>';
-        }
-        src.delete(); gray.delete();
-      }catch(e){
-        row.innerHTML=f.name+' <span class="ng">✗ エラー: '+(e.message||e)+'</span>';
-      }
-      await tick();
+  async function start(){
+    startError.style.display="none";
+    if(!window.isSecureContext){
+      showStartError("この機能はHTTPS(または localhost)でのみ動作します。https:// のURLで開いてください。");
+      return;
     }
-    progress.textContent="検出成功 "+okCount+"/"+fileArr.length+" 枚"+
-      (locked?"(パターン "+locked.cols+"×"+locked.rows+")":"")+
-      (okCount<5?" — 最低5枚、推奨10枚以上が必要です":" — 「校正を計算する」を押してください");
-    btnCalc.disabled = okCount<5;
-  }
-
-  /* ---------- 校正計算 ---------- */
-  async function calibrate(){
-    if(!locked){ toast("先に画像を読み込んでください"); return; }
-    const cols=locked.cols, rows=locked.rows;
-    progress.textContent="校正を計算中...(枚数により数十秒かかります)";
-    btnCalc.disabled=true;
-    await tick();
-    const N=cols*rows;
-    const objVec=new cv.MatVector(), imgVec=new cv.MatVector();
-    const keep=[];
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      showStartError("このブラウザはカメラ機能に対応していません。SafariまたはChromeでお試しください。");
+      return;
+    }
     try{
-      const objp=new cv.Mat(N,1,cv.CV_32FC3);
-      keep.push(objp);
-      for(let i=0;i<rows;i++)for(let j=0;j<cols;j++){
-        const idx=(i*cols+j)*3;
-        objp.data32F[idx]=j; objp.data32F[idx+1]=i; objp.data32F[idx+2]=0;
+      await openCamera({facingMode:{ideal:"environment"},
+                        width:{ideal:1920}, height:{ideal:1080}});
+      const all = await navigator.mediaDevices.enumerateDevices();
+      devices = all.filter(d=>d.kind==="videoinput");
+      const cur = currentStream.getVideoTracks()[0].getSettings().deviceId;
+      deviceIndex = Math.max(0, devices.findIndex(d=>d.deviceId===cur));
+      startScreen.style.display="none";
+      stage.style.display="block";
+      dock.style.display="flex";
+      layout();
+    }catch(err){
+      if(err && (err.name==="NotAllowedError"||err.name==="SecurityError")){
+        showStartError("カメラへのアクセスが許可されませんでした。ブラウザの設定からこのサイトのカメラを許可して、再読み込みしてください。");
+      }else if(err && err.name==="NotFoundError"){
+        showStartError("利用できるカメラが見つかりませんでした。");
+      }else{
+        showStartError("カメラを起動できませんでした("+(err&&err.name||"不明なエラー")+")。");
       }
-      for(const v of views){
-        const m=new cv.Mat(N,1,cv.CV_32FC2);
-        m.data32F.set(v.corners);
-        keep.push(m);
-        objVec.push_back(objp);
-        imgVec.push_back(m);
-      }
-      const K=cv.Mat.eye(3,3,cv.CV_64F);
-      const D=new cv.Mat();
-      const rvecs=new cv.MatVector(), tvecs=new cv.MatVector();
-      const stdI=new cv.Mat(), stdE=new cv.Mat(), perView=new cv.Mat();
-      keep.push(K,D,stdI,stdE,perView);
-      const size=new cv.Size(imgSize.W,imgSize.H);
-      let rms;
-      try{
-        rms=cv.calibrateCameraExtended(objVec,imgVec,size,K,D,rvecs,tvecs,stdI,stdE,perView);
-      }catch(e){
-        rms=cv.calibrateCameraExtended(objVec,imgVec,size,K,D,rvecs,tvecs,stdI,stdE,perView,0);
-      }
-      const fx=K.data64F[0], fy=K.data64F[4];
-      const hfov=deg(2*Math.atan(imgSize.W/(2*fx)));
-      const vfov=deg(2*Math.atan(imgSize.H/(2*fy)));
-      const dfov=deg(2*Math.atan(Math.hypot(imgSize.W/(2*fx),imgSize.H/(2*fy))));
-      lastResult={hfov,vfov,dfov,rms};
-      $("rH").textContent=hfov.toFixed(1)+"°";
-      $("rV").textContent=vfov.toFixed(1)+"°";
-      $("rD").textContent=dfov.toFixed(1)+"°";
-      $("rRms").textContent=rms.toFixed(3);
-      $("rQuality").textContent = rms<=0.3? "(優秀)": rms<=0.7? "(良好)":
-        "(高め:撮影のブレ・ボードの歪みを確認して撮り直しを推奨)";
-      result.style.display="block";
-      progress.textContent="計算完了("+views.length+"枚使用)";
-      rvecs.delete(); tvecs.delete();
-    }catch(e){
-      progress.textContent="計算に失敗しました: "+(e.message||e);
-    }finally{
-      keep.forEach(m=>{ try{m.delete();}catch(e){} });
-      try{objVec.delete();}catch(e){}
-      try{imgVec.delete();}catch(e){}
-      btnCalc.disabled = views.length<5;
     }
   }
+  function showStartError(msg){ startError.textContent=msg; startError.style.display="block"; }
 
-  /* ---------- 登録済みカメラ ---------- */
-  function loadPresets(){
-    try{ return JSON.parse(localStorage.getItem(LSKEY)||"[]"); }catch(e){ return []; }
+  async function cycleLens(){
+    if(devices.length<2){ toast("切替できるカメラがありません"); return; }
+    deviceIndex = (deviceIndex+1)%devices.length;
+    try{
+      await openCamera({deviceId:{exact:devices[deviceIndex].deviceId},
+                        width:{ideal:1920}, height:{ideal:1080}});
+      const label = devices[deviceIndex].label || ("カメラ "+(deviceIndex+1));
+      toast(label.slice(0,28));
+    }catch(e){ toast("切替に失敗しました"); }
   }
-  function savePresets(a){ localStorage.setItem(LSKEY,JSON.stringify(a)); }
-  function simUrl(p){
-    const q=new URLSearchParams();
-    q.set("fov",p.hfov.toFixed(0)); q.set("vfov",p.vfov.toFixed(0)); q.set("name",p.name);
-    return "./?"+q.toString();
+
+  async function capture(){
+    const f = fractions(); if(!f) return;
+    const vw=video.videoWidth, vh=video.videoHeight;
+    const rw=Math.round(vw*f.rx), rh=Math.round(vh*f.ry);
+    const cv=document.createElement("canvas"); cv.width=rw; cv.height=rh;
+    const cx=cv.getContext("2d");
+    cx.fillStyle="#15181B"; cx.fillRect(0,0,rw,rh);
+    const ox=(rw-vw)/2, oy=(rh-vh)/2;
+    const sx=Math.max(0,-ox), sy=Math.max(0,-oy);
+    const dw=Math.min(vw,rw), dh=Math.min(vh,rh);
+    cx.drawImage(video, sx, sy, dw, dh, Math.max(0,ox), Math.max(0,oy), dw, dh);
+    const pad=Math.round(rh*0.03), fs=Math.max(14,Math.round(rh*0.035));
+    const label=(state.name? state.name+"  ":"")+"HFOV "+state.tfov.toFixed(0)+
+                "° VFOV "+state.tvfov.toFixed(0)+"°  "+new Date().toLocaleString("ja-JP");
+    cx.font="600 "+fs+"px "+"'Roboto Mono',monospace";
+    const tw=cx.measureText(label).width;
+    cx.fillStyle="rgba(0,0,0,.55)";
+    cx.fillRect(pad-6, rh-pad-fs-8, tw+12, fs+12);
+    cx.fillStyle="#FFC72C";
+    cx.fillText(label, pad, rh-pad);
+
+    cv.toBlob(async blob=>{
+      if(!blob){ toast("画像の生成に失敗しました"); return; }
+      const file=new File([blob],"gakaku_"+Date.now()+".png",{type:"image/png"});
+      if(navigator.canShare && navigator.canShare({files:[file]})){
+        try{ await navigator.share({files:[file],title:"画角シミュレーション"}); return; }
+        catch(e){ if(e && e.name==="AbortError") return; }
+      }
+      const a=document.createElement("a");
+      a.href=URL.createObjectURL(blob); a.download=file.name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+      toast("画像を保存しました");
+    },"image/png");
   }
-  function renderPresets(){
-    const list=$("presetList"); list.innerHTML="";
-    const arr=loadPresets();
-    if(!arr.length){ list.innerHTML='<p style="margin:0">まだ登録がありません。</p>'; return; }
-    arr.forEach((p,idx)=>{
-      const d=document.createElement("div"); d.className="preset";
-      d.innerHTML='<span class="nm">'+escapeHtml(p.name)+'</span>'+
-        '<span class="val">'+p.hfov.toFixed(1)+'°×'+p.vfov.toFixed(1)+'°</span>'+
-        '<span class="rms">RMS '+p.rms.toFixed(2)+' / '+p.date+'</span>'+
-        '<span class="sp"></span>'+
-        '<a href="'+simUrl(p)+'" target="_blank">シミュレータで開く</a>'+
-        '<button data-copy="'+idx+'">URLコピー</button>'+
-        '<button data-del="'+idx+'">削除</button>';
-      list.appendChild(d);
-    });
-    list.querySelectorAll("button[data-del]").forEach(b=>
-      b.addEventListener("click",()=>{
-        const a=loadPresets(); a.splice(parseInt(b.dataset.del),1);
-        savePresets(a); renderPresets();
-      }));
-    list.querySelectorAll("button[data-copy]").forEach(b=>
-      b.addEventListener("click",async ()=>{
-        const p=loadPresets()[parseInt(b.dataset.copy)];
-        const abs=new URL(simUrl(p),location.href).href;
-        try{ await navigator.clipboard.writeText(abs); toast("URLをコピーしました"); }
-        catch(e){ prompt("このURLをコピーしてください",abs); }
-      }));
+
+  /* ---------- 角度計測(ジャイロ) ---------- */
+  const M = { active:false, phase:null, marks:{}, yaw:0, lastA:null, pitch:0, gotEvent:false };
+  const crosshair=$("crosshair"), measurePanel=$("measurePanel");
+  const mTitle=$("mTitle"), mSub=$("mSub"), mLive=$("mLive"), mResult=$("mResult");
+  const btnMPrimary=$("btnMPrimary");
+
+  function onOri(e){
+    M.gotEvent=true;
+    if(e.alpha!=null){
+      if(M.lastA==null){ M.lastA=e.alpha; }
+      else{
+        let d=e.alpha-M.lastA;
+        if(d>180)d-=360; if(d<-180)d+=360;
+        M.yaw+=d; M.lastA=e.alpha;
+      }
+    }
+    if(e.beta!=null) M.pitch=e.beta;
+    if(M.active) updateMeasureLive();
+  }
+  async function ensureSensor(){
+    if(typeof DeviceOrientationEvent!=="undefined" &&
+       typeof DeviceOrientationEvent.requestPermission==="function"){
+      try{ if(await DeviceOrientationEvent.requestPermission()!=="granted") return false; }
+      catch(e){ return false; }
+    }
+    if(!ensureSensor._bound){
+      window.addEventListener("deviceorientation", onOri);
+      ensureSensor._bound=true;
+    }
+    return true;
+  }
+  function updateMeasureLive(){
+    let t="";
+    if(M.phase==="R" && M.marks.L!=null) t="左端から "+Math.abs(M.yaw-M.marks.L).toFixed(1)+"°";
+    if(M.phase==="B" && M.marks.T!=null) t="上端から "+Math.abs(M.pitch-M.marks.T).toFixed(1)+"°";
+    mLive.textContent=t;
+  }
+  function setUI(title,sub,btn){ mTitle.textContent=title; mSub.textContent=sub;
+    btnMPrimary.textContent=btn; mLive.textContent=""; }
+  function stepTo(p){
+    M.phase=p;
+    if(p==="L") setUI("① 左端に合わせる",
+      "映したい範囲の左端に、画面中央の十字を合わせて記録してください。","左端を記録");
+    if(p==="R") setUI("② 右端に合わせる",
+      "その場で体ごと右へ回し、範囲の右端に十字を合わせて記録してください。","右端を記録");
+    if(p==="HDONE") setUI("水平方向の計測結果",
+      "続けて上下方向も確認できます。終了する場合は「終了」を押してください。","上下も計測する");
+    if(p==="T") setUI("③ 上端に合わせる",
+      "端末は縦向きのまま上に傾け、範囲の上端に十字を合わせて記録してください。","上端を記録");
+    if(p==="B") setUI("④ 下端に合わせる",
+      "下に傾けて、範囲の下端に十字を合わせて記録してください。","下端を記録");
+    if(p==="DONE") setUI("計測完了",
+      "結果を確認してください。「終了」で通常表示に戻ります。","もう一度計測");
+  }
+  function lensSuggest(need){
+    const ps=[{f:"12mm",a:27},{f:"8mm",a:39},{f:"6mm",a:50},{f:"4mm",a:70},{f:"3.6mm",a:81},{f:"2.8mm",a:103}];
+    const ok=ps.find(p=>p.a>=need);
+    return ok? "焦点距離"+ok.f+"(約"+ok.a+"°)以上の広角レンズなら収まります。"
+             : "一般的な単一カメラの画角を超えています。設置位置を離す・複数台・パンチルトをご検討ください。";
+  }
+  function showHResult(){
+    const need=Math.abs(M.marks.R-M.marks.L);
+    const ok=need<=state.tfov;
+    mResult.style.display="block";
+    mResult.innerHTML="必要水平画角: <b style='color:var(--accent)'>約"+need.toFixed(0)+"°</b>"+
+      " / 設定中のカメラ: "+state.tfov.toFixed(0)+"°<br>"+
+      (ok? "→ <b>この位置から収まります。</b>"
+         : "→ <b>収まりません。</b>"+lensSuggest(need));
+  }
+  function showVResult(){
+    const needV=Math.abs(M.marks.B-M.marks.T);
+    const tv=targetVFov(); const ok=needV<=tv;
+    mResult.innerHTML+="<br>必要垂直画角: <b style='color:var(--accent)'>約"+needV.toFixed(0)+"°</b>"+
+      " / カメラ垂直画角: "+tv.toFixed(0)+"° → "+(ok?"<b>収まります。</b>":"<b>収まりません。</b>");
+  }
+  async function startMeasure(){
+    if(!(await ensureSensor())){ toast("このブラウザでは方位センサーを利用できません"); return; }
+    M.active=true; M.marks={}; M.gotEvent=false;
+    crosshair.style.display="block"; measurePanel.style.display="block";
+    dock.style.display="none"; sheet.classList.remove("open");
+    mResult.style.display="none"; mResult.innerHTML="";
+    stepTo("L");
+    setTimeout(()=>{ if(M.active && !M.gotEvent)
+      toast("センサー値を取得できません(この端末は非対応の可能性があります)"); },1500);
+  }
+  function endMeasure(){
+    M.active=false; crosshair.style.display="none";
+    measurePanel.style.display="none"; dock.style.display="flex";
+  }
+  btnMPrimary.addEventListener("click", ()=>{
+    if(M.phase==="L"){ M.marks.L=M.yaw; stepTo("R"); }
+    else if(M.phase==="R"){ M.marks.R=M.yaw; showHResult(); stepTo("HDONE"); }
+    else if(M.phase==="HDONE"){ stepTo("T"); }
+    else if(M.phase==="T"){ M.marks.T=M.pitch; stepTo("B"); }
+    else if(M.phase==="B"){ M.marks.B=M.pitch; showVResult(); stepTo("DONE"); }
+    else if(M.phase==="DONE"){ startMeasure(); }
+  });
+  $("btnMCancel").addEventListener("click", endMeasure);
+  $("btnMeasure").addEventListener("click", startMeasure);
+
+  /* ---------- 写真判定モード(基準物で校正/メタデータ不使用) ---------- */
+  const P={img:null,W:0,H:0,fpx:0,phase:"cal",c1:0,c2:0,m1:0,m2:0,t:0,b:0,drag:null};
+  const photoMode=$("photoMode"), pCanvas=$("pCanvas"), pEmpty=$("pEmpty");
+  const pResult=$("pResult"), pRefW=$("pRefW"), pRefD=$("pRefD");
+  const pCalRow=$("pCalRow"), pRangeRow=$("pRangeRow"), pFile=$("pFile");
+  const pHeightRow=$("pHeightRow"), pHOn=$("pHOn");
+  const pHCam=$("pHCam"), pHShot=$("pHShot"), pHDist=$("pHDist");
+
+  function pLoad(file){
+    const url=URL.createObjectURL(file);
+    const img=new Image();
+    img.onload=()=>{
+      P.img=img; P.W=img.naturalWidth; P.H=img.naturalHeight;
+      P.c1=P.W*0.38; P.c2=P.W*0.62;
+      P.m1=P.W*0.20; P.m2=P.W*0.80;
+      P.t=P.H*0.25;  P.b=P.H*0.75;
+      P.fpx=0;
+      pEmpty.style.display="none";
+      pSetPhase("cal");
+    };
+    img.onerror=()=>toast("この画像は表示できません。JPEG/PNGでお試しください");
+    img.src=url;
+  }
+  function pSetPhase(ph){
+    P.phase=ph;
+    pCalRow.style.display = (ph==="cal") ? "flex" : "none";
+    pRangeRow.style.display = (ph==="range") ? "flex" : "none";
+    pHeightRow.style.display = (ph==="range") ? "flex" : "none";
+    if(ph==="cal"){
+      pResult.innerHTML=
+        "オレンジのマーカーを<b>基準物の左端・右端</b>に合わせ、実際の幅と距離を入力して「校正を確定」を押してください。";
+    }
+    pDraw();
+  }
+  function pGeom(){
+    const c=pCanvas, r=c.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
+    const cw=Math.round(r.width*dpr), ch=Math.round(r.height*dpr);
+    if(c.width!==cw||c.height!==ch){ c.width=cw; c.height=ch; }
+    const k=Math.min(c.width/P.W, c.height/P.H);
+    return {k, ox:(c.width-P.W*k)/2, oy:(c.height-P.H*k)/2};
+  }
+  function pFpxSolve(x1,x2,theta){
+    const cx=P.W/2;
+    const span=fp=>Math.atan((Math.max(x1,x2)-cx)/fp)-Math.atan((Math.min(x1,x2)-cx)/fp);
+    let lo=P.W*0.05, hi=P.W*200;
+    if(span(lo)<theta) return 0;
+    for(let i=0;i<70;i++){ const mid=(lo+hi)/2; if(span(mid)>theta) lo=mid; else hi=mid; }
+    return (lo+hi)/2;
+  }
+  function pAngle(x){ return Math.atan((x-P.W/2)/P.fpx); }
+  function pAngleY(y){ return Math.atan((P.H/2-y)/P.fpx); }
+  function pDraw(){
+    if(!P.img) return;
+    const g=pGeom(), cx=pCanvas.getContext("2d"), dpr=window.devicePixelRatio||1;
+    cx.clearRect(0,0,pCanvas.width,pCanvas.height);
+    cx.drawImage(P.img,g.ox,g.oy,P.W*g.k,P.H*g.k);
+    const toCX=x=>g.ox+x*g.k, toCY=y=>g.oy+y*g.k;
+    const tab=(x,y,lab,color,ink)=>{
+      const w=(lab.length>1?46:30)*dpr, h=20*dpr, r=6*dpr;
+      cx.fillStyle=color;
+      if(cx.roundRect){ cx.beginPath(); cx.roundRect(x-w/2,y-h/2,w,h,r); cx.fill(); }
+      else cx.fillRect(x-w/2,y-h/2,w,h);
+      cx.fillStyle=ink; cx.font="700 "+(12*dpr)+"px sans-serif";
+      cx.textAlign="center"; cx.textBaseline="middle";
+      cx.fillText(lab,x,y);
+    };
+    const vline=(x,lab,color,ink)=>{
+      const X=toCX(x);
+      cx.strokeStyle=color; cx.lineWidth=2.5*dpr;
+      cx.beginPath(); cx.moveTo(X,g.oy); cx.lineTo(X,g.oy+P.H*g.k); cx.stroke();
+      tab(X,g.oy+14*dpr,lab,color,ink);
+    };
+    const hline=(y,lab,color,ink)=>{
+      const Y=toCY(y);
+      cx.strokeStyle=color; cx.lineWidth=2.5*dpr;
+      cx.beginPath(); cx.moveTo(g.ox,Y); cx.lineTo(g.ox+P.W*g.k,Y); cx.stroke();
+      tab(g.ox+22*dpr,Y,lab,color,ink);
+    };
+    if(P.phase==="cal"){
+      vline(P.c1,"基準","#FF9E45","#2A1500");
+      vline(P.c2,"基準","#FF9E45","#2A1500");
+      return;
+    }
+    const a1=pAngle(P.m1), a2=pAngle(P.m2), midH=(a1+a2)/2;
+    const aT=pAngleY(P.t), aB=pAngleY(P.b), midV=(aT+aB)/2;
+    const xL=P.W/2+P.fpx*Math.tan(midH-rad(state.tfov)/2);
+    const xR=P.W/2+P.fpx*Math.tan(midH+rad(state.tfov)/2);
+    const tv=targetVFov();
+    const yTop=P.H/2-P.fpx*Math.tan(midV+rad(tv)/2);
+    const yBot=P.H/2-P.fpx*Math.tan(midV-rad(tv)/2);
+    cx.strokeStyle="#FFC72C"; cx.lineWidth=3*dpr;
+    cx.strokeRect(toCX(xL), toCY(yTop), (xR-xL)*g.k, (yBot-yTop)*g.k);
+    vline(P.m1,"左","#4FC3F7","#08222E");
+    vline(P.m2,"右","#4FC3F7","#08222E");
+    hline(P.t,"上","#4FC3F7","#08222E");
+    hline(P.b,"下","#4FC3F7","#08222E");
+    const needH=deg(Math.abs(a2-a1));
+    let needV=deg(Math.abs(aT-aB));
+    let tiltNote="";
+    if(pHOn.checked){
+      const Hc=parseFloat(pHCam.value), hs=parseFloat(pHShot.value), L=parseFloat(pHDist.value);
+      if(Hc>=0&&hs>=0&&L>0){
+        const topH=hs+L*Math.tan(Math.max(aT,aB));
+        const botH=hs+L*Math.tan(Math.min(aT,aB));
+        const bT=Math.atan((topH-Hc)/L), bB=Math.atan((botH-Hc)/L);
+        needV=deg(bT-bB);
+        const tilt=-deg((bT+bB)/2);
+        tiltNote="(推奨チルト:"+(tilt>=0?"俯角":"仰角")+" 約"+Math.abs(tilt).toFixed(0)+"°)";
+      }
+    }
+    const okH=needH<=state.tfov, okV=needV<=tv;
+    pResult.innerHTML=
+      "必要画角 <b style='color:var(--accent)'>約"+needH.toFixed(0)+"°</b>(水平)× "+
+      "<b style='color:var(--accent)'>約"+needV.toFixed(0)+"°</b>(垂直"+(pHOn.checked?"・高さ補正":"")+")"+
+      " / カメラ "+state.tfov.toFixed(0)+"°×"+tv.toFixed(0)+"°<br>"+
+      "水平: "+(okH?"<b>収まります</b>":"<b>収まりません。</b>"+lensSuggest(needH))+
+      " / 垂直: "+(okV?"<b>収まります</b>":"<b>収まりません</b>")+" "+tiltNote+
+      " <span style='color:var(--sub)'>(写真の水平画角 約"+deg(2*Math.atan((P.W/2)/P.fpx)).toFixed(0)+"°)</span>";
+  }
+  function pClient2Img(e){
+    const g=pGeom(), r=pCanvas.getBoundingClientRect();
+    return {
+      x:((e.clientX-r.left)*(pCanvas.width/r.width)-g.ox)/g.k,
+      y:((e.clientY-r.top)*(pCanvas.height/r.height)-g.oy)/g.k
+    };
+  }
+  pCanvas.addEventListener("pointerdown",e=>{
+    if(!P.img) return;
+    const pt=pClient2Img(e);
+    let cands;
+    if(P.phase==="cal"){
+      cands=[["c1",Math.abs(pt.x-P.c1)],["c2",Math.abs(pt.x-P.c2)]];
+    }else{
+      cands=[["m1",Math.abs(pt.x-P.m1)],["m2",Math.abs(pt.x-P.m2)],
+             ["t",Math.abs(pt.y-P.t)],["b",Math.abs(pt.y-P.b)]];
+    }
+    cands.sort((a,b)=>a[1]-b[1]);
+    P.drag=cands[0][0];
+    pCanvas.setPointerCapture(e.pointerId);
+    pDragMove(e);
+  });
+  function pDragMove(e){
+    if(!P.drag||!P.img) return;
+    const pt=pClient2Img(e);
+    if(P.drag==="t"||P.drag==="b"){
+      P[P.drag]=Math.max(0,Math.min(P.H,pt.y));
+    }else{
+      P[P.drag]=Math.max(0,Math.min(P.W,pt.x));
+    }
+    pDraw();
+  }
+  pCanvas.addEventListener("pointermove",pDragMove);
+  pCanvas.addEventListener("pointerup",()=>P.drag=null);
+  pCanvas.addEventListener("pointercancel",()=>P.drag=null);
+
+  $("pCalOk").addEventListener("click",()=>{
+    if(!P.img){ toast("先に写真を読み込んでください"); return; }
+    const w=parseFloat(pRefW.value), d=parseFloat(pRefD.value);
+    if(!(w>0)||!(d>0)){ toast("基準物の幅と距離を入力してください"); return; }
+    if(Math.abs(P.c2-P.c1)<P.W*0.01){ toast("マーカーの間隔が狭すぎます"); return; }
+    const theta=2*Math.atan(w/(2*d));
+    const fpx=pFpxSolve(P.c1,P.c2,theta);
+    if(!fpx){ toast("校正できません。幅・距離の値とマーカー位置を確認してください"); return; }
+    P.fpx=fpx;
+    pSetPhase("range");
+  });
+  $("pReCal").addEventListener("click",()=>pSetPhase("cal"));
+
+  const pTfov=$("pTfov"), pVfov=$("pVfov"), pDiag=$("pDiag");
+  function pSyncSettings(){
+    pTfov.value=state.tfov.toFixed(0);
+    pVfov.value=state.tvfov.toFixed(0);
+    pDiag.textContent=diagFov().toFixed(0)+"°";
+  }
+  pTfov.addEventListener("input",()=>{
+    const v=parseFloat(pTfov.value);
+    if(v>=20&&v<=140){ state.tfov=v; syncSheet(); syncStartChip();
+      pDiag.textContent=diagFov().toFixed(0)+"°"; pDraw(); if(video.videoWidth) layout(); }
+  });
+  pVfov.addEventListener("input",()=>{
+    const v=parseFloat(pVfov.value);
+    if(v>=10&&v<=120){ state.tvfov=v; syncSheet(); syncStartChip();
+      pDiag.textContent=diagFov().toFixed(0)+"°"; pDraw(); if(video.videoWidth) layout(); }
+  });
+  pHOn.addEventListener("change",()=>{
+    [pHCam,pHShot,pHDist].forEach(i=>i.disabled=!pHOn.checked);
+    pDraw();
+  });
+  [pHCam,pHShot,pHDist].forEach(i=>i.addEventListener("input",pDraw));
+
+  function openPhoto(){
+    photoMode.classList.add("open");
+    dock.style.display="none";
+    pEmpty.style.display=P.img?"none":"flex";
+    pSyncSettings();
+    pDraw();
+  }
+  function closePhoto(){
+    photoMode.classList.remove("open");
+    if(stage.style.display==="block") dock.style.display="flex";
+  }
+  $("btnPhoto").addEventListener("click",openPhoto);
+  $("btnPhotoStart").addEventListener("click",openPhoto);
+  $("pClose").addEventListener("click",closePhoto);
+  $("pPick").addEventListener("click",()=>pFile.click());
+  $("pPick2").addEventListener("click",()=>pFile.click());
+  pFile.addEventListener("change",()=>{ if(pFile.files[0]) pLoad(pFile.files[0]); pFile.value=""; });
+  window.addEventListener("resize",()=>{ if(photoMode.classList.contains("open")) pDraw(); });
+
+  /* ---------- UI ---------- */
+  function toast(msg){
+    const t=$("toast"); t.textContent=msg; t.classList.add("show");
+    clearTimeout(toast._tm); toast._tm=setTimeout(()=>t.classList.remove("show"),2200);
+  }
+
+  function syncSheet(){
+    inName.value=state.name;
+    inFov.value=state.tfov;  outFov.textContent=state.tfov.toFixed(0)+"°";
+    inPfov.value=state.pfov; outPfov.textContent=state.pfov.toFixed(0)+"°";
+    inVfov.value=state.tvfov; outVfov.textContent=state.tvfov.toFixed(0)+"°";
+    outDiag.textContent=diagFov().toFixed(0)+"°";
+    document.querySelectorAll("#fovPresets .chip").forEach(c=>
+      c.classList.toggle("on", Math.abs(parseFloat(c.dataset.fov)-state.tfov)<0.5));
+  }
+  function syncStartChip(){
+    startConfig.innerHTML =
+      (state.name? "<span>"+escapeHtml(state.name)+"</span>":"")+
+      "<span><span class='k'>水平画角 </span>"+state.tfov.toFixed(0)+"°</span>"+
+      "<span><span class='k'>垂直 </span>"+state.tvfov.toFixed(0)+"°</span>";
   }
   function escapeHtml(s){return s.replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));}
 
-  $("btnSave").addEventListener("click",()=>{
-    if(!lastResult){ toast("先に校正を計算してください"); return; }
-    const name=$("camName").value.trim();
-    if(!name){ toast("機種名を入力してください"); return; }
-    const a=loadPresets();
-    a.push({name, hfov:lastResult.hfov, vfov:lastResult.vfov,
-            rms:lastResult.rms, date:new Date().toLocaleDateString("ja-JP")});
-    savePresets(a); renderPresets();
-    toast("登録しました");
+  $("btnStart").addEventListener("click", start);
+  $("btnLens").addEventListener("click", cycleLens);
+  $("btnShot").addEventListener("click", capture);
+  $("btnGrid").addEventListener("click", e=>{
+    state.grid=!state.grid;
+    grid.style.display=state.grid?"block":"none";
+    e.currentTarget.classList.toggle("on",state.grid);
+  });
+  $("btnCrop").addEventListener("click", e=>{
+    state.crop=!state.crop;
+    e.currentTarget.classList.toggle("on",state.crop);
+    toast(state.crop?"カメラ視点表示":"全体表示");
+    layout();
+  });
+  $("btnSheet").addEventListener("click", ()=>{ syncSheet(); sheet.classList.add("open"); });
+  $("btnCloseSheet").addEventListener("click", ()=>sheet.classList.remove("open"));
+  $("btnDone").addEventListener("click", ()=>sheet.classList.remove("open"));
+
+  inName.addEventListener("input", ()=>{ state.name=inName.value; layout(); syncStartChip(); });
+  inFov.addEventListener("input", ()=>{ state.tfov=parseFloat(inFov.value);
+    outFov.textContent=state.tfov.toFixed(0)+"°"; syncSheet(); layout(); syncStartChip();
+    if(photoMode.classList.contains("open")) pDraw(); });
+  inVfov.addEventListener("input", ()=>{ state.tvfov=parseFloat(inVfov.value);
+    syncSheet(); layout(); syncStartChip();
+    if(photoMode.classList.contains("open")) pDraw(); });
+  inPfov.addEventListener("input", ()=>{ state.pfov=parseFloat(inPfov.value);
+    outPfov.textContent=state.pfov.toFixed(0)+"°"; layout(); });
+
+  document.querySelectorAll("#fovPresets .chip").forEach(c=>
+    c.addEventListener("click", ()=>{ state.tfov=parseFloat(c.dataset.fov);
+      syncSheet(); layout(); syncStartChip(); }));
+
+  $("btnCopyUrl").addEventListener("click", async ()=>{
+    const q=new URLSearchParams();
+    q.set("fov", state.tfov.toFixed(0));
+    q.set("vfov", state.tvfov.toFixed(0));
+    q.set("pfov", state.pfov.toFixed(0));
+    if(state.name) q.set("name", state.name);
+    const url=location.origin+location.pathname+"?"+q.toString();
+    try{ await navigator.clipboard.writeText(url); toast("URLをコピーしました"); }
+    catch(e){ prompt("このURLをコピーしてください", url); }
   });
 
-  btnPick.addEventListener("click",()=>filesInput.click());
-  filesInput.addEventListener("change",()=>{
-    if(filesInput.files.length) detectAll(Array.from(filesInput.files))
-      .catch(e=>{ progress.textContent="エラー: "+(e.message||e); });
-    filesInput.value="";
-  });
-  btnCalc.addEventListener("click",calibrate);
-
-  renderPresets();
+  syncStartChip();
+  syncSheet();
 })();
 </script>
 </body>
