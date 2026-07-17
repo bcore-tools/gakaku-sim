@@ -133,7 +133,7 @@
     "https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4/dist/opencv.js",
     "https://unpkg.com/@techstark/opencv-js@4/dist/opencv.js"
   ];
-  const MAXDIM=1600;
+  const FULLDIM=1920;  // 精密化(cornerSubPix)用の上限
 
   let views=[];
   let imgSize=null;
@@ -186,41 +186,60 @@
     return loadCV._p;
   }
 
-  /* ---------- 画像読み込み(縮小してキャンバスへ) ---------- */
-  function loadImageToCanvas(file){
+  /* ---------- 画像読み込み(検出用に縮小/精密化用にフル解像度) ---------- */
+  const DETECT_DIM=900;   // 検出用
+  const SCAN_DIM=560;     // パターン総当たり用(さらに縮小)
+  function loadImage(file){
     return new Promise((res,rej)=>{
       const url=URL.createObjectURL(file);
       const img=new Image();
-      img.onload=()=>{
-        const sc=Math.min(1, MAXDIM/Math.max(img.naturalWidth,img.naturalHeight));
-        const W=Math.round(img.naturalWidth*sc), H=Math.round(img.naturalHeight*sc);
-        const c=document.createElement("canvas"); c.width=W; c.height=H;
-        c.getContext("2d").drawImage(img,0,0,W,H);
-        URL.revokeObjectURL(url);
-        res(c);
-      };
-      img.onerror=()=>rej(new Error("画像を開けません"));
+      img.onload=()=>{ res(img); };
+      img.onerror=()=>{ URL.revokeObjectURL(url); rej(new Error("画像を開けません")); };
       img.src=url;
     });
   }
+  function toCanvas(img,maxDim){
+    const sc=Math.min(1, maxDim/Math.max(img.naturalWidth,img.naturalHeight));
+    const W=Math.round(img.naturalWidth*sc), H=Math.round(img.naturalHeight*sc);
+    const c=document.createElement("canvas"); c.width=W; c.height=H;
+    c.getContext("2d").drawImage(img,0,0,W,H);
+    return {canvas:c, scale:sc};
+  }
   const tick=()=>new Promise(r=>setTimeout(r,0));
 
-  /* ---------- 交点検出(パターンサイズ自動判定) ---------- */
+  /* ---------- 交点検出(縮小検出→フル解像度精密化の2段階) ---------- */
   const SIZE_CANDIDATES=[[9,6],[6,9],[10,7],[7,10],[8,6],[6,8],[7,6],[6,7],[9,7],[7,9],
     [8,5],[5,8],[7,5],[5,7],[6,5],[5,6],[11,8],[8,11],[6,4],[4,6],[5,4],[4,5]];
   let locked=null;
 
-  function tryDetect(gray,cols,rows,fast){
+  function detectCoarse(gray,cols,rows,fast){
     const corners=new cv.Mat();
     const flags=cv.CALIB_CB_ADAPTIVE_THRESH|cv.CALIB_CB_NORMALIZE_IMAGE|
                 (fast?cv.CALIB_CB_FAST_CHECK:0);
     const found=cv.findChessboardCorners(gray,new cv.Size(cols,rows),corners,flags);
     if(!found){ corners.delete(); return null; }
-    cv.cornerSubPix(gray,corners,new cv.Size(11,11),new cv.Size(-1,-1),
-      new cv.TermCriteria(cv.TermCriteria_EPS+cv.TermCriteria_MAX_ITER,30,0.001));
     const arr=new Float32Array(corners.data32F);
     corners.delete();
     return arr;
+  }
+
+  function refineFull(grayFull,coarse,scaleUp,cols,rows){
+    const N=cols*rows;
+    const m=new cv.Mat(N,1,cv.CV_32FC2);
+    for(let i=0;i<N*2;i++) m.data32F[i]=coarse[i]*scaleUp;
+    cv.cornerSubPix(grayFull,m,new cv.Size(11,11),new cv.Size(-1,-1),
+      new cv.TermCriteria(cv.TermCriteria_EPS+cv.TermCriteria_MAX_ITER,30,0.001));
+    const arr=new Float32Array(m.data32F);
+    m.delete();
+    return arr;
+  }
+
+  function grayFromCanvas(canvas){
+    const src=cv.imread(canvas);
+    const gray=new cv.Mat();
+    cv.cvtColor(src,gray,cv.COLOR_RGBA2GRAY);
+    src.delete();
+    return gray;
   }
 
   async function detectAll(fileArr){
@@ -237,40 +256,50 @@
       progress.textContent="交点を検出中 "+(i+1)+"/"+fileArr.length+
         (locked?"(パターン "+locked.cols+"×"+locked.rows+")":"(パターン判定中)");
       await tick();
+      let grayDet=null, grayFull=null;
       try{
-        const canvas=await loadImageToCanvas(f);
-        if(imgSize && (canvas.width!==imgSize.W||canvas.height!==imgSize.H)){
+        const img=await loadImage(f);
+        const full=toCanvas(img,FULLDIM);
+        if(imgSize && (full.canvas.width!==imgSize.W||full.canvas.height!==imgSize.H)){
           row.innerHTML=f.name+' <span class="ng">✗ 解像度が他と異なるため除外</span>';
           continue;
         }
-        const src=cv.imread(canvas);
-        const gray=new cv.Mat();
-        cv.cvtColor(src,gray,cv.COLOR_RGBA2GRAY);
-        let arr=null;
+        const det=toCanvas(img,DETECT_DIM);
+        grayDet=grayFromCanvas(det.canvas);
+        let coarse=null, detScale=det.canvas.width;
         if(locked){
-          arr=tryDetect(gray,locked.cols,locked.rows,false);
+          coarse=detectCoarse(grayDet,locked.cols,locked.rows,false);
         }else{
+          const scan=toCanvas(img,SCAN_DIM);
+          const grayScan=grayFromCanvas(scan.canvas);
           for(const cand of SIZE_CANDIDATES){
-            arr=tryDetect(gray,cand[0],cand[1],true);
-            if(arr){
+            const hit=detectCoarse(grayScan,cand[0],cand[1],true);
+            if(hit){
               locked={cols:cand[0],rows:cand[1]};
               $("patInfo").textContent="検出パターン: "+cand[0]+"×"+cand[1];
               break;
             }
-            await tick();
           }
+          grayScan.delete();
+          await tick();
+          if(locked) coarse=detectCoarse(grayDet,locked.cols,locked.rows,false);
         }
-        if(arr){
+        if(coarse && locked){
+          grayFull=grayFromCanvas(full.canvas);
+          const scaleUp=full.canvas.width/detScale;
+          const arr=refineFull(grayFull,coarse,scaleUp,locked.cols,locked.rows);
           views.push({name:f.name, corners:arr});
-          if(!imgSize) imgSize={W:canvas.width,H:canvas.height};
+          if(!imgSize) imgSize={W:full.canvas.width,H:full.canvas.height};
           okCount++;
           row.innerHTML=f.name+' <span class="ok">✓ 検出成功</span>';
         }else{
           row.innerHTML=f.name+' <span class="ng">✗ ボードを検出できません</span>';
         }
-        src.delete(); gray.delete();
       }catch(e){
         row.innerHTML=f.name+' <span class="ng">✗ エラー: '+(e.message||e)+'</span>';
+      }finally{
+        if(grayDet){ try{grayDet.delete();}catch(e){} }
+        if(grayFull){ try{grayFull.delete();}catch(e){} }
       }
       await tick();
     }
