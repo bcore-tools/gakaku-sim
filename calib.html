@@ -88,12 +88,8 @@
 
   <section>
     <h2>3. 画像を読み込んで計算する</h2>
-    <div class="row">
-      <label>ボード内側の交点数</label>
-      <label>横</label><input type="number" id="cols" value="9" min="4" max="20">
-      <label>縦</label><input type="number" id="rows" value="6" min="4" max="20">
-      <span style="font-size:12px;color:var(--sub)">(付属ボードは 9×6)</span>
-    </div>
+    <p>交点数は画像から<b>自動判定</b>されます(付属の印刷ボードは9×6)。
+      <span id="patInfo" style="font-family:var(--mono);color:var(--accent)"></span></p>
     <div class="row">
       <button class="main" id="btnPick">画像を選ぶ(複数選択)</button>
       <button id="btnCalc" disabled>校正を計算する</button>
@@ -132,11 +128,15 @@
   const filesInput=$("files"), fileList=$("fileList"), progress=$("progress");
   const btnPick=$("btnPick"), btnCalc=$("btnCalc"), result=$("result");
   const LSKEY="gakakuCamPresets";
-  const CV_URL="https://docs.opencv.org/4.10.0/opencv.js";
+  const CV_URLS=[
+    "https://docs.opencv.org/4.x/opencv.js",
+    "https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4/dist/opencv.js",
+    "https://unpkg.com/@techstark/opencv-js@4/dist/opencv.js"
+  ];
   const MAXDIM=1600;
 
-  let views=[];        // {name, corners} 検出成功分
-  let imgSize=null;    // 縮小後サイズ(全画像で一致必須)
+  let views=[];
+  let imgSize=null;
   let lastResult=null;
 
   function toast(m){ const t=$("toast"); t.textContent=m; t.classList.add("show");
@@ -154,28 +154,36 @@
   })();
   $("btnPrint").addEventListener("click",()=>window.print());
 
-  /* ---------- OpenCV.js 遅延読み込み ---------- */
-  let cvLoading=null;
+  /* ---------- OpenCV.js 遅延読み込み(複数CDNフォールバック) ---------- */
   function loadCV(){
     if(window.__cvReady) return Promise.resolve();
-    if(cvLoading) return cvLoading;
-    progress.textContent="OpenCVを読み込んでいます(初回のみ・約10MB)...";
-    cvLoading=new Promise((res,rej)=>{
-      const s=document.createElement("script");
-      s.src=CV_URL;
-      s.onload=async ()=>{
+    if(loadCV._p) return loadCV._p;
+    loadCV._p=(async ()=>{
+      let lastErr=null;
+      for(const u of CV_URLS){
+        progress.textContent="OpenCVを読み込んでいます(初回のみ・約10MB / "+new URL(u).host+")...";
         try{
+          await new Promise((res,rej)=>{
+            const s=document.createElement("script");
+            s.src=u;
+            const to=setTimeout(()=>{ s.remove(); rej(new Error("タイムアウト")); },60000);
+            s.onload=()=>{ clearTimeout(to); res(); };
+            s.onerror=()=>{ clearTimeout(to); s.remove(); rej(new Error("読み込みエラー")); };
+            document.head.appendChild(s);
+          });
           if(typeof cv!=="undefined" && typeof cv.then==="function"){ window.cv=await cv; }
           else if(typeof cv!=="undefined" && !cv.Mat){
             await new Promise(r=>{ cv.onRuntimeInitialized=r; });
           }
-          window.__cvReady=true; res();
-        }catch(e){ rej(e); }
-      };
-      s.onerror=()=>rej(new Error("OpenCVの読み込みに失敗しました(ネットワークを確認してください)"));
-      document.head.appendChild(s);
-    });
-    return cvLoading;
+          if(typeof cv==="undefined" || !cv.Mat) throw new Error("初期化失敗");
+          window.__cvReady=true;
+          return;
+        }catch(e){ lastErr=e; }
+      }
+      loadCV._p=null;
+      throw new Error("OpenCVを読み込めませんでした(3系統すべて失敗)。社内プロキシ等で外部スクリプトがブロックされていないか確認してください。");
+    })();
+    return loadCV._p;
   }
 
   /* ---------- 画像読み込み(縮小してキャンバスへ) ---------- */
@@ -197,11 +205,28 @@
   }
   const tick=()=>new Promise(r=>setTimeout(r,0));
 
-  /* ---------- 交点検出 ---------- */
+  /* ---------- 交点検出(パターンサイズ自動判定) ---------- */
+  const SIZE_CANDIDATES=[[9,6],[6,9],[10,7],[7,10],[8,6],[6,8],[7,6],[6,7],[9,7],[7,9],
+    [8,5],[5,8],[7,5],[5,7],[6,5],[5,6],[11,8],[8,11],[6,4],[4,6],[5,4],[4,5]];
+  let locked=null;
+
+  function tryDetect(gray,cols,rows,fast){
+    const corners=new cv.Mat();
+    const flags=cv.CALIB_CB_ADAPTIVE_THRESH|cv.CALIB_CB_NORMALIZE_IMAGE|
+                (fast?cv.CALIB_CB_FAST_CHECK:0);
+    const found=cv.findChessboardCorners(gray,new cv.Size(cols,rows),corners,flags);
+    if(!found){ corners.delete(); return null; }
+    cv.cornerSubPix(gray,corners,new cv.Size(11,11),new cv.Size(-1,-1),
+      new cv.TermCriteria(cv.TermCriteria_EPS+cv.TermCriteria_MAX_ITER,30,0.001));
+    const arr=new Float32Array(corners.data32F);
+    corners.delete();
+    return arr;
+  }
+
   async function detectAll(fileArr){
     await loadCV();
-    const cols=parseInt($("cols").value), rows=parseInt($("rows").value);
-    views=[]; imgSize=null;
+    views=[]; imgSize=null; locked=null;
+    $("patInfo").textContent="";
     fileList.innerHTML=""; result.style.display="none"; lastResult=null;
     let okCount=0;
     for(let i=0;i<fileArr.length;i++){
@@ -209,7 +234,8 @@
       const row=document.createElement("div");
       row.innerHTML=f.name+' <span class="wait">検出中...</span>';
       fileList.appendChild(row);
-      progress.textContent="交点を検出中 "+(i+1)+"/"+fileArr.length;
+      progress.textContent="交点を検出中 "+(i+1)+"/"+fileArr.length+
+        (locked?"(パターン "+locked.cols+"×"+locked.rows+")":"(パターン判定中)");
       await tick();
       try{
         const canvas=await loadImageToCanvas(f);
@@ -220,34 +246,44 @@
         const src=cv.imread(canvas);
         const gray=new cv.Mat();
         cv.cvtColor(src,gray,cv.COLOR_RGBA2GRAY);
-        const size=new cv.Size(cols,rows);
-        const corners=new cv.Mat();
-        const found=cv.findChessboardCorners(gray,size,corners,
-          cv.CALIB_CB_ADAPTIVE_THRESH|cv.CALIB_CB_NORMALIZE_IMAGE);
-        if(found){
-          cv.cornerSubPix(gray,corners,new cv.Size(11,11),new cv.Size(-1,-1),
-            new cv.TermCriteria(cv.TermCriteria_EPS+cv.TermCriteria_MAX_ITER,30,0.001));
-          views.push({name:f.name, corners:new Float32Array(corners.data32F)});
+        let arr=null;
+        if(locked){
+          arr=tryDetect(gray,locked.cols,locked.rows,false);
+        }else{
+          for(const cand of SIZE_CANDIDATES){
+            arr=tryDetect(gray,cand[0],cand[1],true);
+            if(arr){
+              locked={cols:cand[0],rows:cand[1]};
+              $("patInfo").textContent="検出パターン: "+cand[0]+"×"+cand[1];
+              break;
+            }
+            await tick();
+          }
+        }
+        if(arr){
+          views.push({name:f.name, corners:arr});
           if(!imgSize) imgSize={W:canvas.width,H:canvas.height};
           okCount++;
           row.innerHTML=f.name+' <span class="ok">✓ 検出成功</span>';
         }else{
           row.innerHTML=f.name+' <span class="ng">✗ ボードを検出できません</span>';
         }
-        src.delete(); gray.delete(); corners.delete();
+        src.delete(); gray.delete();
       }catch(e){
         row.innerHTML=f.name+' <span class="ng">✗ エラー: '+(e.message||e)+'</span>';
       }
       await tick();
     }
     progress.textContent="検出成功 "+okCount+"/"+fileArr.length+" 枚"+
-      (okCount<5?"(最低5枚、推奨10枚以上が必要です)":" — 「校正を計算する」を押してください");
+      (locked?"(パターン "+locked.cols+"×"+locked.rows+")":"")+
+      (okCount<5?" — 最低5枚、推奨10枚以上が必要です":" — 「校正を計算する」を押してください");
     btnCalc.disabled = okCount<5;
   }
 
   /* ---------- 校正計算 ---------- */
   async function calibrate(){
-    const cols=parseInt($("cols").value), rows=parseInt($("rows").value);
+    if(!locked){ toast("先に画像を読み込んでください"); return; }
+    const cols=locked.cols, rows=locked.rows;
     progress.textContent="校正を計算中...(枚数により数十秒かかります)";
     btnCalc.disabled=true;
     await tick();
