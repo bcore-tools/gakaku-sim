@@ -96,7 +96,7 @@
     background:var(--panel);backdrop-filter:blur(14px);
     border-top:1px solid var(--line);border-radius:18px 18px 0 0;
     padding:18px 20px calc(env(safe-area-inset-bottom) + 18px);
-    max-height:78vh;overflow-y:auto;
+    max-height:min(78vh,78dvh);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;
     transform:translateY(105%);transition:transform .28s cubic-bezier(.3,.9,.3,1)}
   #sheet.open{transform:translateY(0)}
   @media (prefers-reduced-motion:reduce){#sheet{transition:none}}
@@ -107,7 +107,7 @@
   .fieldLabel{display:flex;justify-content:space-between;align-items:baseline;
     font-size:13px;color:var(--sub);margin-bottom:6px}
   .fieldLabel output{font-family:var(--mono);color:var(--ink);font-size:14px}
-  input[type=range]{width:100%;accent-color:var(--accent);height:32px}
+  input[type=range]{width:100%;accent-color:var(--accent);height:32px;touch-action:pan-y}
   input[type=text]{width:100%;background:rgba(255,255,255,.06);border:1px solid var(--line);
     border-radius:10px;padding:10px 12px;color:var(--ink);font-size:15px}
   .chips{display:flex;flex-wrap:wrap;gap:8px}
