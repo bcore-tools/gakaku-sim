@@ -304,6 +304,11 @@
     <button id="btnCloseSheet">閉じる ✕</button>
   </div>
 
+  <div class="field" id="camListField" style="display:none">
+    <div class="fieldLabel"><span>登録済みカメラから選ぶ</span></div>
+    <div class="chips" id="camChips"></div>
+  </div>
+
   <div class="field">
     <div class="fieldLabel"><span>カメラ名(任意)</span></div>
     <input type="text" id="inName" placeholder="例:AXIS M2036-LE" maxlength="40">
@@ -343,6 +348,7 @@
 
 <div id="toast" role="status"></div>
 
+<script src="./cameras.js"></script>
 <script>
 (function(){
   "use strict";
@@ -877,7 +883,29 @@
     toast(state.crop?"カメラ視点表示":"全体表示");
     layout();
   });
-  $("btnSheet").addEventListener("click", ()=>{ syncSheet(); sheet.classList.add("open"); });
+  function renderCamList(){
+    const arr=window.CAMERA_LIST;
+    const field=$("camListField"), box=$("camChips");
+    if(!Array.isArray(arr)||!arr.length) return;
+    field.style.display="";
+    box.innerHTML="";
+    arr.forEach(c=>{
+      if(!c || !c.name || !(c.fov>0) || !(c.vfov>0)) return;
+      const b=document.createElement("button");
+      b.className="chip";
+      b.textContent=c.name+"("+c.fov+"°×"+c.vfov+"°)";
+      if(state.name===c.name && Math.abs(state.tfov-c.fov)<0.5 &&
+         Math.abs(state.tvfov-c.vfov)<0.5) b.classList.add("on");
+      b.addEventListener("click",()=>{
+        state.name=c.name; state.tfov=c.fov; state.tvfov=c.vfov;
+        syncSheet(); layout(); syncStartChip(); renderCamList();
+        if(photoMode.classList.contains("open")){ pSyncSettings(); pDraw(); }
+      });
+      box.appendChild(b);
+    });
+  }
+
+  $("btnSheet").addEventListener("click", ()=>{ syncSheet(); renderCamList(); sheet.classList.add("open"); });
   $("btnCloseSheet").addEventListener("click", ()=>sheet.classList.remove("open"));
   $("btnDone").addEventListener("click", ()=>sheet.classList.remove("open"));
 
@@ -908,6 +936,7 @@
 
   syncStartChip();
   syncSheet();
+  renderCamList();
 })();
 </script>
 </body>
